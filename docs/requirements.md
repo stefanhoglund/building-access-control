@@ -246,6 +246,8 @@ The dashboard shall visualize, for the active scenario:
 REQ-BS-001
 BuildSim shall be treated as the authoritative source for current building topology, controlled-door state, and registered equipment state.
 
+Simulated occupant location and occupancy truth are owned by the Occupant and Movement Simulator as defined in ADR-006.
+
 REQ-BS-002
 Historical observations and decisions shall not rely solely on BuildSim persistence.
 

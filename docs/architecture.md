@@ -544,7 +544,7 @@ The architecture provides a first mapping between requirements and system compon
 |---|---|
 | Functional access control | Decision Service, Actuator Processes, Simulator |
 | Authorization | Decision Service |
-| Building topology | Simulator, BuildSim |
+| Building topology and security configuration | System Configuration (zones, controlled doors, device bindings), BuildSim (physical topology and current door state), Simulator (movement over topology) |
 | Simulation | Simulator |
 | Autonomous decisions | Decision Service |
 | Distributed execution | Sensor Processes, Decision Service, Actuator Processes |
