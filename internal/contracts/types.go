@@ -1,7 +1,9 @@
 // Package contracts defines the Go representations of the messages and
-// records described in docs/data-contracts.md. It covers only the first
-// vertical slice: one controlled door, ALLOW/DENY authorization, no
-// anomaly detection.
+// records described in docs/data-contracts.md. It covers the first
+// vertical slice (one controlled door, ALLOW/DENY authorization, no
+// anomaly detection) and the successful-passage CPS slice (REQ-FUNC-004,
+// REQ-SIM-005, REQ-SIM-006): door-state observation, occupant crossing,
+// and occupancy observation.
 package contracts
 
 // AccessAttemptObservation is emitted by a Card Reader. See
@@ -69,8 +71,9 @@ const (
 	ActionUnlock = "UNLOCK"
 	ActionLock   = "LOCK"
 
-	ReasonAllowUnlock   = "ALLOW_UNLOCK"
-	ReasonRelockTimeout = "RELOCK_TIMEOUT"
+	ReasonAllowUnlock     = "ALLOW_UNLOCK"
+	ReasonRelockTimeout   = "RELOCK_TIMEOUT"
+	ReasonPassageComplete = "RELOCK_AFTER_PASSAGE"
 )
 
 // ActuatorCommand is sent by the Autonomous Decision Service to the Door
@@ -102,26 +105,78 @@ type ActuatorOutcome struct {
 	ModelTime     string `json:"model_time"`
 }
 
-// DoorEventNotOpened is the one DoorEvent type used by this slice
-// (REQ-FUNC-003). See docs/data-contracts.md section 5.
+// DoorPosition values an observation or BuildSim call may carry
+// (design-specification.md section 9.1).
+const (
+	DoorPositionOpen    = "OPEN"
+	DoorPositionClosed  = "CLOSED"
+	DoorPositionBlocked = "BLOCKED"
+)
+
+// ObservationQualityOK is the only data-quality value this slice
+// produces for sensor observations; no fault injection yet degrades it
+// (REQ-RES-003 is deferred).
+const ObservationQualityOK = "OK"
+
+// DoorStateObservation is emitted by a DoorStateSensor, which polls
+// BuildSimClient.GetDoorState and reports only door_position
+// (design-specification.md section 2.9). It is the one authoritative
+// report that a door physically opened or closed — the Simulator causes
+// the transition (SetDoorPosition) but is never treated as having
+// observed it (section 4.1). It carries no decision_id: the Autonomous
+// Decision Service correlates door_id to its own per-door control state
+// instead (section 9.7). See docs/data-contracts.md section 5.
+type DoorStateObservation struct {
+	EventID       string `json:"event_id"`
+	SchemaVersion string `json:"schema_version"`
+	SourceID      string `json:"source_id"`
+	ModelTime     string `json:"model_time"`
+	SourceTime    string `json:"source_time"`
+	ReceiveTime   string `json:"receive_time,omitempty"`
+	DoorID        string `json:"door_id"`
+	DoorPosition  string `json:"door_position"`
+	Quality       string `json:"quality"`
+}
+
+// DoorEventNotOpened is the one DoorEvent type used by this slice,
+// produced by the Autonomous Decision Service itself (REQ-FUNC-003). See
+// docs/data-contracts.md section 6.
 const DoorEventNotOpened = "DOOR_NOT_OPENED"
 
 // DoorEvent is a minimal evidence-only record for door-lifecycle events
-// that are not themselves an AccessDecision or ActuatorOutcome.
+// that are not themselves an AccessDecision, ActuatorOutcome, or
+// DoorStateObservation.
 type DoorEvent struct {
 	EventType  string `json:"event_type"`
 	DoorID     string `json:"door_id"`
-	DecisionID string `json:"decision_id"`
+	DecisionID string `json:"decision_id,omitempty"`
 	ModelTime  string `json:"model_time"`
 }
 
-// Evidence record types (docs/data-contracts.md section 6).
+// OccupancyObservation is emitted by an OccupancySensor
+// (design-specification.md section 2.8/4.5). See docs/data-contracts.md
+// section 7.
+type OccupancyObservation struct {
+	EventID       string `json:"event_id"`
+	SchemaVersion string `json:"schema_version"`
+	SourceID      string `json:"source_id"`
+	ModelTime     string `json:"model_time"`
+	SourceTime    string `json:"source_time"`
+	ReceiveTime   string `json:"receive_time,omitempty"`
+	RoomKey       string `json:"room_key"`
+	Count         int    `json:"count"`
+	Quality       string `json:"quality"`
+}
+
+// Evidence record types (docs/data-contracts.md section 8).
 const (
-	RecordTypeObservation = "observation"
-	RecordTypeDecision    = "decision"
-	RecordTypeCommand     = "command"
-	RecordTypeOutcome     = "outcome"
-	RecordTypeDoorEvent   = "door_event"
+	RecordTypeObservation          = "observation"
+	RecordTypeDecision             = "decision"
+	RecordTypeCommand              = "command"
+	RecordTypeOutcome              = "outcome"
+	RecordTypeDoorEvent            = "door_event"
+	RecordTypeDoorStateObservation = "door_state_observation"
+	RecordTypeOccupancyObservation = "occupancy_observation"
 )
 
 // PendingPresentation is the Simulator's internal (non-evidence) record of

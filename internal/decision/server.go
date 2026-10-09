@@ -28,10 +28,14 @@ const relockTimeout = 10 * time.Second
 
 // doorControlState is the per-door logical control state owned by this
 // service while an access cycle is active (design-specification.md
-// section 9.7).
+// section 9.7). opened is set once a DOOR_OPENED event arrives for this
+// door, which disarms the no-open timeout (REQ-FUNC-003 only applies
+// while the door has not been opened) in favor of relock-after-passage
+// (REQ-FUNC-004), triggered by the subsequent DOOR_CLOSED event.
 type doorControlState struct {
 	decisionID      string
 	unlockModelTime time.Time
+	opened          bool
 }
 
 // Server is the Autonomous Decision Service's HTTP handler plus its
@@ -61,6 +65,7 @@ func New(cfg *config.Config, eventDataBaseURL, actuatorBaseURL, simulatorBaseURL
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /decide", s.handleDecide)
+	mux.HandleFunc("POST /door-state-observations", s.handleDoorStateObservation)
 	return mux
 }
 
@@ -98,7 +103,10 @@ func (s *Server) checkRelockTimers() {
 	s.mu.Lock()
 	var expired []string
 	for doorID, state := range s.pending {
-		if !now.Before(state.unlockModelTime.Add(relockTimeout)) {
+		// A door that was opened is no longer subject to the no-open
+		// timeout; relock-after-passage (REQ-FUNC-004) owns it instead,
+		// triggered by handleDoorStateObservation on a CLOSED observation.
+		if !state.opened && !now.Before(state.unlockModelTime.Add(relockTimeout)) {
 			expired = append(expired, doorID)
 		}
 	}
@@ -113,12 +121,7 @@ func (s *Server) checkRelockTimers() {
 // door-open observation within 10 model seconds produces a
 // DOOR_NOT_OPENED event and a LOCK command.
 func (s *Server) relockOnTimeout(doorID string, now time.Time) {
-	s.mu.Lock()
-	state, ok := s.pending[doorID]
-	if ok {
-		delete(s.pending, doorID)
-	}
-	s.mu.Unlock()
+	state, ok := s.takePending(doorID)
 	if !ok {
 		return // already relocked by a concurrent tick
 	}
@@ -135,15 +138,73 @@ func (s *Server) relockOnTimeout(doorID string, now time.Time) {
 		log.Printf("decision: post DOOR_NOT_OPENED event: %v", err)
 	}
 
+	s.relock(doorID, state.decisionID, contracts.ReasonRelockTimeout, nowStr)
+}
+
+// takePending atomically removes and returns doorID's pending control
+// state, if any. Used by both relock paths so a door is relocked exactly
+// once regardless of which path wins the race.
+func (s *Server) takePending(doorID string) (doorControlState, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, ok := s.pending[doorID]
+	if ok {
+		delete(s.pending, doorID)
+	}
+	return state, ok
+}
+
+// relock issues the LOCK command common to both relock paths (no-open
+// timeout and after-passage).
+func (s *Server) relock(doorID, decisionID, reason, modelTime string) {
 	command := contracts.ActuatorCommand{
 		CommandID:  idgen.New(),
-		DecisionID: state.decisionID,
+		DecisionID: decisionID,
 		DoorID:     doorID,
 		Action:     contracts.ActionLock,
-		Reason:     contracts.ReasonRelockTimeout,
-		ModelTime:  nowStr,
+		Reason:     reason,
+		ModelTime:  modelTime,
 	}
 	s.issueCommand(command)
+}
+
+// handleDoorStateObservation reacts to the DoorStateSensor's observed
+// door_position (design-specification.md section 9.7, REQ-FUNC-004): an
+// OPEN observation disarms the no-open timeout for this door; a CLOSED
+// observation for a door already marked opened relocks it immediately,
+// using the observation's own model_time rather than re-querying it. A
+// CLOSED observation for a door not marked opened (e.g. the sensor's
+// initial steady-state report, or a door with no pending decision at all)
+// is not a passage-complete signal and is ignored — see
+// docs/data-contracts.md section 5 ("Correlation").
+func (s *Server) handleDoorStateObservation(w http.ResponseWriter, r *http.Request) {
+	var obs contracts.DoorStateObservation
+	if err := json.NewDecoder(r.Body).Decode(&obs); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	switch obs.DoorPosition {
+	case contracts.DoorPositionOpen:
+		s.mu.Lock()
+		if state, ok := s.pending[obs.DoorID]; ok {
+			state.opened = true
+			s.pending[obs.DoorID] = state
+		}
+		s.mu.Unlock()
+	case contracts.DoorPositionClosed:
+		s.mu.Lock()
+		state, ok := s.pending[obs.DoorID]
+		shouldRelock := ok && state.opened
+		s.mu.Unlock()
+		if shouldRelock {
+			if state, ok := s.takePending(obs.DoorID); ok {
+				s.relock(obs.DoorID, state.decisionID, contracts.ReasonPassageComplete, obs.ModelTime)
+			}
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 // handleDecide evaluates a validated AccessAttemptObservation and

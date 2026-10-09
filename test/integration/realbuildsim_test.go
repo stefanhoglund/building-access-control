@@ -111,7 +111,9 @@ func TestRealBuildSimALLOWAndRelock(t *testing.T) {
 	decisionURL := "http://" + decisionLn.Addr().String()
 	actuatorURL := "http://" + actuatorLn.Addr().String()
 
-	simServer := simulator.New(clock, buildsim.NewHTTPClient(buildsimURL))
+	// Crossing simulation is disabled: this test demonstrates the pure
+	// no-open relock timeout (REQ-FUNC-003), not successful passage.
+	simServer := simulator.New(clock, buildsim.NewHTTPClient(buildsimURL), simulator.CrossingConfig{}, nil)
 	eventDataServer := eventdata.New(store, decisionURL)
 	decisionServer := decision.New(cfg, eventDataURL, actuatorURL, simulatorURL)
 	actuatorServer := actuator.New(buildsim.NewHTTPClient(buildsimURL), eventDataURL)

@@ -1,15 +1,19 @@
 // Package simulator implements the minimal Occupant & Movement Simulator
-// needed by the first vertical slice: it owns model time (ADR-003) and
-// simulated truth (ADR-006), and exposes both for observation rather than
+// needed by the vertical slices built so far: it owns model time
+// (ADR-003) and simulated truth — occupant intent, door position, and
+// occupancy (ADR-006) — and exposes it for observation rather than
 // pushing into sensor processes (container.d2: "sensors -> simulator:
 // observe simulated state / events").
 //
-// Full behavioral/schedule/stochastic generation (REQ-SIM-001/002/003/006)
-// is out of scope for this slice.
+// Full behavioral/schedule/stochastic generation (REQ-SIM-001/002/003)
+// and multi-occupant tracking are out of scope: this slice simulates
+// exactly one controlled door and one occupant crossing it
+// (REQ-FUNC-004, REQ-SIM-005, REQ-SIM-006).
 package simulator
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -19,25 +23,72 @@ import (
 	"github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/modeltime"
 )
 
+// unlockWaitTimeout bounds how long the Simulator waits
+// (design-specification.md section 11.6: bounded waits, not indefinite
+// blocking) for a door to become UNLOCKED before giving up on a crossing.
+// A DENY attempt never unlocks the door, so this bound is also what makes
+// "no occupancy transition occurs when movement is denied" (REQ-SIM-005)
+// hold without any separate denial-handling code path.
+const unlockWaitTimeout = 5 * time.Second
+const unlockPollInterval = 20 * time.Millisecond
+
+// passageDwell is how long the door is held OPEN during a simulated
+// crossing before closing again. This is not just simulation realism: the
+// door-open/door-close transition is now only knowable to the rest of the
+// system through an independent DoorStateSensor polling BuildSim
+// (design-specification.md section 2.9 — the Simulator causes the
+// transition but is not the one who reports observing it). Without a
+// deliberate dwell, a poller could miss the OPEN state entirely between
+// two poll ticks. This value must stay comfortably larger than any
+// DoorStateSensor's configured poll interval.
+const passageDwell = 150 * time.Millisecond
+
+// CrossingConfig describes the one controlled-door crossing this slice
+// simulates. A zero-value CrossingConfig (DoorID == "") disables crossing
+// simulation entirely — existing scenarios that only need ALLOW/DENY/
+// relock-timeout behavior are unaffected.
+type CrossingConfig struct {
+	DoorID     string
+	FromRoom   string // level-qualified, e.g. "level0/1540" (REQ-TOPO-004)
+	ToRoom     string // level-qualified, e.g. "level0/A109"
+	PersonID   string
+	PersonName string
+}
+
 // Server is the Simulator's HTTP handler. It holds no System Configuration
-// (ADR-004) in this slice: the scenario-control caller supplies reader_id,
-// door_id, and direction directly, keeping the Simulator config-free for
-// now.
+// (ADR-004): the scenario-control caller supplies reader_id, door_id, and
+// direction directly, and CrossingConfig supplies the one crossing this
+// slice knows how to simulate.
 type Server struct {
 	clock    *modeltime.Clock
 	buildsim buildsim.Client
-	mu       sync.Mutex
-	pending  map[string][]contracts.PendingPresentation // keyed by reader_id, FIFO
+	crossing CrossingConfig
+
+	mu        sync.Mutex
+	pending   map[string][]contracts.PendingPresentation // keyed by reader_id, FIFO
+	occupancy map[string]int                             // keyed by level-qualified room
+	inFlight  map[string]bool                            // doorID -> crossing goroutine active
 }
 
 // New creates a Simulator server. clock is the authoritative model clock;
 // bs is shared with the Actuator so writes from one are visible to reads
-// from the other.
-func New(clock *modeltime.Clock, bs buildsim.Client) *Server {
+// from the other. The Simulator never reports having observed a door
+// transition or an occupancy change — see DoorStateObservation and
+// OccupancyObservation (docs/data-contracts.md sections 5/7) — so it has
+// no need of the Event/Data Service's address. initialOccupancy seeds
+// room occupancy truth, keyed by level-qualified room.
+func New(clock *modeltime.Clock, bs buildsim.Client, crossing CrossingConfig, initialOccupancy map[string]int) *Server {
+	occupancy := make(map[string]int, len(initialOccupancy))
+	for room, count := range initialOccupancy {
+		occupancy[room] = count
+	}
 	return &Server{
-		clock:    clock,
-		buildsim: bs,
-		pending:  make(map[string][]contracts.PendingPresentation),
+		clock:     clock,
+		buildsim:  bs,
+		crossing:  crossing,
+		pending:   make(map[string][]contracts.PendingPresentation),
+		occupancy: occupancy,
+		inFlight:  make(map[string]bool),
 	}
 }
 
@@ -47,9 +98,22 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /pending-presentations", s.handlePendingPresentations)
 	mux.HandleFunc("POST /scenario/present", s.handleScenarioPresent)
 	mux.HandleFunc("GET /doors/{door_id}/state", s.handleDoorState)
+	mux.HandleFunc("GET /occupancy", s.handleGetOccupancy)
 	mux.HandleFunc("GET /modeltime", s.handleGetModelTime)
 	mux.HandleFunc("POST /modeltime/advance", s.handleAdvanceModelTime)
 	return mux
+}
+
+// MirrorInitialOccupancy writes the current occupancy truth for every room
+// named in CrossingConfig to BuildSim, so BuildSim's visualization starts
+// consistent with simulator truth rather than empty. It is a no-op if
+// crossing is disabled.
+func (s *Server) MirrorInitialOccupancy() {
+	if s.crossing.DoorID == "" {
+		return
+	}
+	s.mirrorOccupancy(s.crossing.FromRoom)
+	s.mirrorOccupancy(s.crossing.ToRoom)
 }
 
 // handlePendingPresentations implements the Card Reader's observation
@@ -81,7 +145,9 @@ func (s *Server) handlePendingPresentations(w http.ResponseWriter, r *http.Reque
 
 // handleScenarioPresent is the scenario-control input used by tests to
 // enqueue a presentation. It belongs to the Simulator, not the Card
-// Reader, so the Reader never receives an inbound push.
+// Reader, so the Reader never receives an inbound push. If the presented
+// door matches CrossingConfig, it also starts watching for the door to
+// unlock so the occupant can cross (REQ-FUNC-004/REQ-SIM-005).
 func (s *Server) handleScenarioPresent(w http.ResponseWriter, r *http.Request) {
 	var req contracts.ScenarioPresentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -104,6 +170,8 @@ func (s *Server) handleScenarioPresent(w http.ResponseWriter, r *http.Request) {
 	s.pending[req.ReaderID] = append(s.pending[req.ReaderID], presentation)
 	s.mu.Unlock()
 
+	go s.watchForUnlockAndCross(req.DoorID)
+
 	w.WriteHeader(http.StatusAccepted)
 }
 
@@ -122,6 +190,28 @@ func (s *Server) handleDoorState(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"lock_state":    string(state.LockState),
 		"door_position": string(state.DoorPosition),
+	})
+}
+
+// handleGetOccupancy implements the OccupancySensor's observation
+// interface: GET /occupancy?room=<level-qualified room> returns the
+// Simulator's current occupancy truth for that room
+// (design-specification.md section 2.8: sensors observe simulated truth,
+// not BuildSim's mirrored copy of it).
+func (s *Server) handleGetOccupancy(w http.ResponseWriter, r *http.Request) {
+	room := r.URL.Query().Get("room")
+	if room == "" {
+		http.Error(w, "room is required", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	count := s.occupancy[room]
+	s.mu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"room_key": room,
+		"count":    count,
 	})
 }
 
@@ -149,4 +239,104 @@ func (s *Server) handleAdvanceModelTime(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(map[string]string{
 		"model_time": modeltime.Format(now),
 	})
+}
+
+// watchForUnlockAndCross waits (bounded) for doorID to become UNLOCKED and
+// then simulates the occupant crossing it. It is a no-op for any door
+// other than the one CrossingConfig names, and it will not start a second
+// concurrent crossing for the same door.
+func (s *Server) watchForUnlockAndCross(doorID string) {
+	if s.crossing.DoorID == "" || s.crossing.DoorID != doorID {
+		return
+	}
+	if !s.beginCrossing(doorID) {
+		return
+	}
+	defer s.endCrossing(doorID)
+
+	deadline := time.Now().Add(unlockWaitTimeout)
+	for {
+		state, err := s.buildsim.GetDoorState(doorID)
+		if err == nil && state.LockState == buildsim.LockStateUnlocked {
+			break
+		}
+		if time.Now().After(deadline) {
+			// REQ-SIM-004/REQ-SIM-005: the door never unlocked (e.g. a
+			// DENY decision) — the occupant does not cross, and no
+			// occupancy transition occurs.
+			return
+		}
+		time.Sleep(unlockPollInterval)
+	}
+
+	s.crossNow(doorID)
+}
+
+func (s *Server) beginCrossing(doorID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.inFlight[doorID] {
+		return false
+	}
+	s.inFlight[doorID] = true
+	return true
+}
+
+func (s *Server) endCrossing(doorID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.inFlight, doorID)
+}
+
+// crossNow simulates the occupant opening the door, crossing, and closing
+// it: ALLOW -> UNLOCK (already done by the caller/Actuator) -> OPEN ->
+// occupant crosses -> source occupancy decreases, destination occupancy
+// increases -> CLOSE. The Simulator only causes these physical
+// transitions in BuildSim; it does not report having observed them, and
+// it does not lock or unlock the door itself. An independent
+// DoorStateSensor reports the OPEN/CLOSE transitions
+// (design-specification.md section 2.9), and the Autonomous Decision
+// Service, informed by that sensor's observations, issues the relock
+// command (section 9.7).
+func (s *Server) crossNow(doorID string) {
+	cfg := s.crossing
+
+	if err := s.buildsim.SetDoorPosition(doorID, buildsim.DoorPositionOpen); err != nil {
+		log.Printf("simulator: set door_position OPEN: %v", err)
+	}
+
+	time.Sleep(passageDwell)
+
+	s.mu.Lock()
+	if s.occupancy[cfg.FromRoom] > 0 {
+		s.occupancy[cfg.FromRoom]--
+	}
+	s.occupancy[cfg.ToRoom]++
+	s.mu.Unlock()
+
+	s.mirrorOccupancy(cfg.FromRoom)
+	s.mirrorOccupancy(cfg.ToRoom)
+
+	if err := s.buildsim.SetDoorPosition(doorID, buildsim.DoorPositionClosed); err != nil {
+		log.Printf("simulator: set door_position CLOSED: %v", err)
+	}
+}
+
+// mirrorOccupancy writes roomKey's current occupancy truth to BuildSim
+// for visualization only (design-specification.md section 4.5, ADR-006 —
+// one-way, never read back). This slice tracks exactly one occupant, so
+// the room holding a nonzero count is represented as that one Person.
+func (s *Server) mirrorOccupancy(roomKey string) {
+	s.mu.Lock()
+	count := s.occupancy[roomKey]
+	cfg := s.crossing
+	s.mu.Unlock()
+
+	var persons []buildsim.Person
+	if count > 0 && (roomKey == cfg.FromRoom || roomKey == cfg.ToRoom) {
+		persons = []buildsim.Person{{ID: cfg.PersonID, Name: cfg.PersonName}}
+	}
+	if err := s.buildsim.SetRoomOccupancy(roomKey, buildsim.RoomOccupancy{Persons: persons}); err != nil {
+		log.Printf("simulator: mirror occupancy for %s: %v", roomKey, err)
+	}
 }

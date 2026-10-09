@@ -1,12 +1,12 @@
 # Data Contracts
 
-Status: partial — covers only the messages and records needed by the first
-vertical slice (one controlled door, one card reader, ALLOW/DENY, no
-anomaly detection, fake BuildSim client).
+Status: partial — covers the first vertical slice (one controlled door,
+one card reader, ALLOW/DENY, no anomaly detection), the real BuildSim
+adapter, and the successful-passage CPS slice (REQ-FUNC-004, REQ-SIM-005,
+REQ-SIM-006: door-state sensing, occupant crossing, occupancy sensing).
 
-This document will grow as later slices add occupancy sensing, door-state
-sensing, anomaly detection, fault injection, and the real BuildSim adapter.
-It does not yet cover those.
+This document will grow as later slices add anomaly detection, fault
+injection, and additional doors. It does not yet cover those.
 
 All timestamps are RFC3339 strings. `model_time` is owned by the Simulator
 (ADR-003) and is never computed locally by another component. `source_time`
@@ -77,9 +77,12 @@ Sent by the Autonomous Decision Service to the Door Actuator.
 }
 ```
 
-`action` is `UNLOCK` or `LOCK`. `reason` is `ALLOW_UNLOCK` or
-`RELOCK_TIMEOUT` in this slice. `command_id` is the idempotency key
-(REQ-DIST-007): the Actuator must not apply the same `command_id` twice.
+`action` is `UNLOCK` or `LOCK`. `reason` is one of `ALLOW_UNLOCK`,
+`RELOCK_TIMEOUT` (REQ-FUNC-003: no door-open observation within 10 model
+seconds), or `RELOCK_AFTER_PASSAGE` (REQ-FUNC-004: a door-close
+observation arrived for a door that was observed open). `command_id` is
+the idempotency key (REQ-DIST-007): the Actuator must not apply the same
+`command_id` twice.
 
 ## 4. ActuatorOutcome
 
@@ -100,11 +103,62 @@ Returned by the Door Actuator to the Event/Data Service (ADR-005).
 the requested state, `UNVERIFIED` otherwise. `UNVERIFIED` handling beyond
 recording it is deferred (REQ-RES-002 is out of scope for this slice).
 
-## 5. DoorEvent
+## 5. DoorStateObservation
+
+Emitted by a DoorStateSensor, which polls `BuildSimClient.GetDoorState`
+and reports only `door_position` (REQ-DATA-003 fields plus the observed
+value). This is the one authoritative report of a door physically opening
+or closing — the Simulator causes the physical transition
+(`SetDoorPosition`) but is never treated as having observed it
+(design-specification.md §2.9/§4.1: simulated/physical truth and sensor
+observation are always distinct, even when the same component could
+technically report both).
+
+```json
+{
+  "event_id": "uuid",
+  "schema_version": "1",
+  "source_id": "doorstatesensor-1",
+  "model_time": "2026-10-08T08:15:31Z",
+  "source_time": "2026-10-08T10:00:01.000Z",
+  "receive_time": "2026-10-08T10:00:01.050Z",
+  "door_id": "door-1",
+  "door_position": "OPEN",
+  "quality": "OK"
+}
+```
+
+`door_position` is `OPEN`, `CLOSED`, or `BLOCKED`
+(design-specification.md §9.1). `model_time` is not inferred by the sensor
+from its own observation — it is read from the Simulator at the moment of
+observation (§4.3.1: "If a component requires the current model time
+outside the context of an existing event, the mechanism for obtaining it
+shall be defined by the corresponding interface contract"), since a
+physical door transition is not itself a simulation-originated event
+carrying `model_time` already. `quality` is always `OK` in this slice; full
+staleness/freshness handling (REQ-RES-003) is deferred to a
+fault-injection slice. The sensor reports only on a change in
+`door_position`, not on every poll.
+
+**Correlation.** This observation carries no `decision_id`: the sensor has
+no way to know one, and is not supposed to — attaching a decision to a
+physical observation would blur the authorization/observation boundary
+this specification maintains elsewhere. The Autonomous Decision Service
+correlates an incoming `door_id` to its own per-door control state
+(design-specification.md §9.7): an `OPEN` observation for a door with a
+pending unlock marks it opened (disarming the REQ-FUNC-003 no-open
+timeout); a subsequent `CLOSED` observation for that same door, now marked
+opened, triggers `RELOCK_AFTER_PASSAGE` (REQ-FUNC-004). A `CLOSED`
+observation for a door with no pending state, or not yet marked opened, is
+not a passage-complete signal and is ignored by the Decision Service
+(though still retained as evidence).
+
+## 6. DoorEvent
 
 A minimal evidence-only record for door-lifecycle events that are not
-themselves an AccessDecision or ActuatorOutcome. This slice uses exactly
-one: `DOOR_NOT_OPENED` (REQ-FUNC-003).
+themselves an AccessDecision, ActuatorOutcome, or DoorStateObservation.
+This slice uses exactly one: `DOOR_NOT_OPENED` (REQ-FUNC-003), produced by
+the Autonomous Decision Service itself, not by a sensor.
 
 ```json
 {
@@ -115,7 +169,32 @@ one: `DOOR_NOT_OPENED` (REQ-FUNC-003).
 }
 ```
 
-## 6. Evidence Record Envelope
+## 7. OccupancyObservation
+
+Emitted by an OccupancySensor, which polls the Simulator's occupancy truth
+for one room (design-specification.md §2.8/§4.5) — never BuildSim's
+mirrored copy of it, which is visualization-only (ADR-006).
+
+```json
+{
+  "event_id": "uuid",
+  "schema_version": "1",
+  "source_id": "occupancysensor-1",
+  "model_time": "2026-10-08T08:15:31Z",
+  "source_time": "2026-10-08T10:00:01.000Z",
+  "receive_time": "2026-10-08T10:00:01.050Z",
+  "room_key": "level0/A109",
+  "count": 1,
+  "quality": "OK"
+}
+```
+
+`room_key` is a level-qualified room identifier (REQ-TOPO-004). `count` is
+the occupancy truth at the moment of observation. `quality` is always `OK`
+in this slice (see DoorStateObservation above — the same REQ-RES-003
+deferral applies). The sensor reports only on a change in `count`.
+
+## 8. Evidence Record Envelope
 
 The Historical Evidence Store is an append-only JSONL file. The Event/Data
 Service is the only writer (ADR-005). Every line is one envelope:
@@ -129,12 +208,13 @@ Service is the only writer (ADR-005). Every line is one envelope:
 ```
 
 `record_type` is one of `observation`, `decision`, `command`, `outcome`,
-`door_event`. `recorded_at` is wall-clock receive time at the Event/Data
-Service. This satisfies REQ-DATA-002 (survives restart, file-backed) and
-REQ-TEST-002 (an attempt is traceable by following `event_id` →
-`decision_id` → `command_id`).
+`door_event`, `door_state_observation`, `occupancy_observation`.
+`recorded_at` is wall-clock receive time at the Event/Data Service. This
+satisfies REQ-DATA-002 (survives restart, file-backed) and REQ-TEST-002
+(an attempt is traceable by following `event_id` → `decision_id` →
+`command_id`).
 
-## 7. System Configuration (file)
+## 9. System Configuration (file)
 
 Loaded only by the Autonomous Decision Service in this slice (ADR-004).
 JSON, not YAML, to avoid adding a parsing dependency.
@@ -152,6 +232,8 @@ JSON, not YAML, to avoid adding a parsing dependency.
       "door_id": "door-1",
       "from_zone": "ZONE-PUBLIC",
       "to_zone": "ZONE-EMPLOYEE",
+      "from_room": "level0/1540",
+      "to_room": "level0/A109",
       "direction": "PUBLIC_TO_EMPLOYEE",
       "reader_id": "reader-1",
       "actuator_id": "actuator-1"
@@ -182,14 +264,17 @@ JSON, not YAML, to avoid adding a parsing dependency.
 }
 ```
 
-Day/time constraints (REQ-AUTH-005) are omitted fields, meaning
-unconstrained; the precedence evaluator (ADR-001) still runs its full
-precedence chain even though only one role-level permission exists.
+`from_room`/`to_room` are level-qualified room identifiers (REQ-TOPO-004)
+— the two rooms occupancy truth moves between on a successful crossing —
+distinct from `from_zone`/`to_zone`'s security classification. Day/time
+constraints (REQ-AUTH-005) are omitted fields, meaning unconstrained; the
+precedence evaluator (ADR-001) still runs its full precedence chain even
+though only one role-level permission exists.
 
-## 8. Internal-only interfaces (not persisted, not evidence)
+## 10. Internal-only interfaces (not persisted, not evidence)
 
-These exist only to coordinate the five processes and the test harness.
-They carry no REQ-DATA-003 obligations because they are not retained
+These exist only to coordinate the processes and the test harness. They
+carry no REQ-DATA-003 obligations because they are not retained
 observations.
 
 - Simulator `GET /pending-presentations?reader_id=`: returns zero or one
@@ -198,16 +283,34 @@ observations.
   enqueues a presentation. `{reader_id, card_id, door_id, direction}`.
 - Simulator `GET /doors/{door_id}/state`: passthrough read of the
   BuildSimClient's current state for that door.
-- Simulator `GET /modeltime`: current model time.
+- Simulator `GET /occupancy?room=`: returns `{room_key, count}` — the
+  Simulator's current occupancy truth for that room, polled by
+  OccupancySensor.
+- Simulator `GET /modeltime`: current model time. Also polled by
+  DoorStateSensor and OccupancySensor to stamp their observations
+  (see §5/§7).
 - Simulator `POST /modeltime/advance`: `{seconds}` — test-only deterministic
   model-time advance, avoiding real-time waits in tests (§4.3 model time is
   independent of wall-clock time).
 
-## 9. BuildSim contract
+## 11. BuildSim contract
 
-Not defined here. `BuildSimClient` (Go interface:
-`GetDoorState`/`SetDoorState`) is the integration seam. This slice uses
-only `FakeBuildSimClient`, an in-memory implementation with no network
-protocol of its own and no claim about BuildSim's real API
-(`design-specification.md` §12.3). The real adapter is implemented once
-local BuildSim door API documentation is available.
+`BuildSimClient` (Go interface) is the integration seam:
+
+- `GetDoorState(doorID)` — read `lock_state`/`door_position`. Used by the
+  Door Actuator (to verify its own commands) and by DoorStateSensor (to
+  observe passage).
+- `SetDoorState(doorID, lockState)` — used by the Door Actuator only.
+- `SetDoorPosition(doorID, position)` — used by the Simulator only, to
+  cause the physical open/close transition it is simulating.
+- `SetRoomOccupancy(roomKey, occupancy)` — used by the Simulator only, to
+  mirror occupancy truth for visualization. There is no corresponding
+  `GetRoomOccupancy`: nothing in this system reads occupancy back from
+  BuildSim (ADR-006).
+
+Two implementations exist: `FakeBuildSimClient` (in-memory, used by all
+automated tests) and `HTTPClient` (the real adapter, verified against
+`docs/internal/D7065E/buildingsim`). The real adapter hides BuildSim's
+whole-collection replace semantics on both `PUT /api/doors` and
+`PUT /api/occupancy` behind a read-modify-write
+(design-specification.md §12.3) — callers never see it.

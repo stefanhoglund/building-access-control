@@ -14,10 +14,17 @@ type Zone struct {
 	Name   string `json:"name"`
 }
 
+// ControlledDoor connects two BuildSim locations
+// (design-specification.md section 2.6). FromRoom/ToRoom are
+// level-qualified room identifiers (REQ-TOPO-004, e.g. "level0/1540") —
+// the two rooms occupancy truth moves between on a successful crossing
+// (REQ-SIM-005), distinct from FromZone/ToZone's security classification.
 type ControlledDoor struct {
 	DoorID     string `json:"door_id"`
 	FromZone   string `json:"from_zone"`
 	ToZone     string `json:"to_zone"`
+	FromRoom   string `json:"from_room"`
+	ToRoom     string `json:"to_room"`
 	Direction  string `json:"direction"`
 	ReaderID   string `json:"reader_id"`
 	ActuatorID string `json:"actuator_id"`

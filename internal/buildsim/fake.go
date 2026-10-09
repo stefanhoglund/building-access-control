@@ -21,6 +21,7 @@ import "sync"
 type FakeClient struct {
 	mu    sync.Mutex
 	doors map[string]DoorState
+	rooms map[string]RoomOccupancy
 }
 
 // NewFakeClient creates a FakeClient seeded with the given initial door
@@ -30,7 +31,7 @@ func NewFakeClient(initial map[string]DoorState) *FakeClient {
 	for id, state := range initial {
 		doors[id] = state
 	}
-	return &FakeClient{doors: doors}
+	return &FakeClient{doors: doors, rooms: make(map[string]RoomOccupancy)}
 }
 
 func (f *FakeClient) GetDoorState(doorID string) (DoorState, error) {
@@ -52,5 +53,27 @@ func (f *FakeClient) SetDoorState(doorID string, lockState LockState) error {
 	}
 	state.LockState = lockState
 	f.doors[doorID] = state
+	return nil
+}
+
+func (f *FakeClient) SetDoorPosition(doorID string, position DoorPosition) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	state, ok := f.doors[doorID]
+	if !ok {
+		return ErrDoorNotFound{DoorID: doorID}
+	}
+	state.DoorPosition = position
+	f.doors[doorID] = state
+	return nil
+}
+
+// SetRoomOccupancy stores occupancy directly, keyed by room. Unlike the
+// real adapter, no read-modify-write is needed: this map is already keyed
+// per-room, so setting one room's entry cannot disturb any other room's.
+func (f *FakeClient) SetRoomOccupancy(roomKey string, occupancy RoomOccupancy) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.rooms[roomKey] = occupancy
 	return nil
 }

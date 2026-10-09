@@ -13,14 +13,10 @@ import (
 func main() {
 	addr := flag.String("addr", ":8084", "listen address")
 	eventDataURL := flag.String("eventdata-url", "http://localhost:8082", "Event/Data Service base URL")
-	doorID := flag.String("door-id", "door-1", "the one controlled door this actuator applies commands to")
+	buildsimURL := flag.String("buildsim-url", "http://127.0.0.1:9090", "real BuildSim base URL")
 	flag.Parse()
 
-	// No real BuildSim adapter yet (design-specification.md section
-	// 12.3); see cmd/simulator's main.go comment about standalone runs.
-	bs := buildsim.NewFakeClient(map[string]buildsim.DoorState{
-		*doorID: {LockState: buildsim.LockStateLocked, DoorPosition: buildsim.DoorPositionClosed},
-	})
+	bs := buildsim.NewHTTPClient(*buildsimURL)
 
 	srv := actuator.New(bs, *eventDataURL)
 	log.Printf("actuator: listening on %s", *addr)

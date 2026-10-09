@@ -10,6 +10,8 @@
       "door_id": "door-1",
       "from_zone": "ZONE-PUBLIC",
       "to_zone": "ZONE-EMPLOYEE",
+      "from_room": "level0/1540",
+      "to_room": "level0/A109",
       "direction": "PUBLIC_TO_EMPLOYEE",
       "reader_id": "reader-1",
       "actuator_id": "actuator-1"

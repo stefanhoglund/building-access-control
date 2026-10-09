@@ -93,7 +93,11 @@ func startSlice(t *testing.T) *slice {
 	decisionURL := "http://" + decisionLn.Addr().String()
 	actuatorURL := "http://" + actuatorLn.Addr().String()
 
-	simServer := simulator.New(clock, bs)
+	// Crossing simulation is disabled for this shared harness: these three
+	// tests (ALLOW/DENY/relock-timeout) must keep their original,
+	// passage-independent behavior. TestSuccessfulPassage builds its own
+	// harness with crossing enabled instead of reusing this one.
+	simServer := simulator.New(clock, bs, simulator.CrossingConfig{}, nil)
 	eventDataServer := eventdata.New(store, decisionURL)
 	decisionServer := decision.New(cfg, eventDataURL, actuatorURL, simulatorURL)
 	actuatorServer := actuator.New(bs, eventDataURL)
