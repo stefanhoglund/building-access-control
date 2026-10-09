@@ -1,0 +1,22 @@
+direction: right
+
+operator: Security Operator {
+  shape: person
+}
+
+access_system: Resilient Anomaly-Aware Access Control System {
+  style.stroke-width: 2
+}
+
+buildsim: BuildSim {
+  style.stroke-dash: 4
+}
+
+viewer: BuildSim 3D Viewer {
+  style.stroke-dash: 4
+}
+
+operator -> viewer: views building state and alerts
+viewer -> buildsim: WebSocket / REST
+access_system -> buildsim: reads and updates building state
+buildsim -> access_system: exposes current building state

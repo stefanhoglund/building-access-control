@@ -1,0 +1,68 @@
+direction: down
+
+operator: Security Operator {
+  shape: person
+}
+
+system: Resilient Anomaly-Aware Access Control System {
+  style.stroke-dash: 4
+  style.fill: transparent
+
+  simulator: Occupant & Movement Simulator
+
+  sensors: Sensor Processes {
+    style.stroke-dash: 4
+    style.fill: transparent
+
+    readers: Card Readers
+    occupancy: Occupancy Sensors
+    doorstate: Door-State Sensors
+  }
+
+  data: Event & Data Service
+
+  decision: Autonomous Decision Service
+
+  actuators: Door Actuator Processes
+
+  storage: Historical Evidence Store {
+    shape: cylinder
+  }
+
+  dashboard: Dashboard Service
+
+  # Sensors observe simulation state/events.
+  sensors -> simulator: observe simulated state / events
+
+  # Live control path.
+  sensors -> data: observations
+  data -> decision: validated observations
+  decision -> actuators: UNLOCK / LOCK commands
+
+  # Evidence path.
+  decision -> data: decisions / command evidence
+  actuators -> data: command outcomes
+  data -> storage: persistent evidence
+
+  # Operator visibility.
+  data -> dashboard: current state / health / decisions
+  storage -> dashboard: historical evidence
+}
+
+buildsim: BuildSim {
+  style.stroke-dash: 4
+}
+
+# Physical actuation.
+system.actuators -> buildsim: REST — update door / lock state
+
+# Physical verification.
+system.sensors.doorstate -> buildsim: REST GET — observe door state
+
+# Simulator checks whether physical state permits movement.
+system.simulator -> buildsim: REST GET — door / route / building state
+
+# Simulator mirrors current occupancy for visualization.
+system.simulator -> buildsim: REST — mirror occupancy state
+
+operator -> system.dashboard: monitors decisions, alerts, and system health
