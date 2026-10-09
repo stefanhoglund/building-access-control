@@ -254,6 +254,10 @@ Historical observations and decisions shall not rely solely on BuildSim persiste
 REQ-BS-003
 An accepted actuator command shall produce an observable BuildSim state change that can affect subsequent simulator behavior or sensor observations.
 
+Status: partially verified with FakeBuildSimClient
+Final verification: pending real BuildSim integration
+
+
 REQ-PERF-001
 Under nominal load, 95% of access decisions shall be produced within a defined latency threshold.
 

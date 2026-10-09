@@ -1,0 +1,40 @@
+{
+  "zones": [
+    { "zone_id": "ZONE-PUBLIC", "name": "Public" },
+    { "zone_id": "ZONE-STUDENT", "name": "Student" },
+    { "zone_id": "ZONE-EMPLOYEE", "name": "Employee" },
+    { "zone_id": "ZONE-RESTRICTED", "name": "Restricted" }
+  ],
+  "controlled_doors": [
+    {
+      "door_id": "door-1",
+      "from_zone": "ZONE-PUBLIC",
+      "to_zone": "ZONE-EMPLOYEE",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "reader_id": "reader-1",
+      "actuator_id": "actuator-1"
+    }
+  ],
+  "roles": [
+    { "role_id": "employee" },
+    { "role_id": "visitor" }
+  ],
+  "users": [
+    { "user_id": "user-allow", "roles": ["employee"] },
+    { "user_id": "user-deny", "roles": ["visitor"] }
+  ],
+  "access_cards": [
+    { "card_id": "card-allow", "user_id": "user-allow", "status": "ACTIVE" },
+    { "card_id": "card-deny", "user_id": "user-deny", "status": "ACTIVE" }
+  ],
+  "permissions": [
+    {
+      "subject_type": "ROLE",
+      "subject_id": "employee",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "effect": "ALLOW",
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,237 @@
+// Package decision implements the Autonomous Decision Service
+// (architecture.md section 5.5). This slice implements authorization and
+// decision policy fully; the anomaly module is a structural pass-through
+// (anomaly_result is always NOT_EVALUATED, design-specification.md
+// section 7.4); runtime assurance is the minimal hard-constraint check
+// reachable by this slice's paths. It also owns the per-door logical
+// control state and relock timer (design-specification.md section 9.7,
+// architecture.md section 11).
+package decision
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/config"
+	"github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/contracts"
+	"github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/httpx"
+	"github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/idgen"
+	"github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/modeltime"
+)
+
+// relockTimeout is REQ-FUNC-003's 10-model-second no-open window.
+const relockTimeout = 10 * time.Second
+
+// doorControlState is the per-door logical control state owned by this
+// service while an access cycle is active (design-specification.md
+// section 9.7).
+type doorControlState struct {
+	decisionID      string
+	unlockModelTime time.Time
+}
+
+// Server is the Autonomous Decision Service's HTTP handler plus its
+// background relock-timeout ticker.
+type Server struct {
+	cfg              *config.Config
+	eventDataBaseURL string
+	actuatorBaseURL  string
+	simulatorBaseURL string
+
+	mu      sync.Mutex
+	pending map[string]doorControlState // keyed by door_id
+}
+
+// New creates an Autonomous Decision Service server.
+func New(cfg *config.Config, eventDataBaseURL, actuatorBaseURL, simulatorBaseURL string) *Server {
+	return &Server{
+		cfg:              cfg,
+		eventDataBaseURL: eventDataBaseURL,
+		actuatorBaseURL:  actuatorBaseURL,
+		simulatorBaseURL: simulatorBaseURL,
+		pending:          make(map[string]doorControlState),
+	}
+}
+
+// Handler returns the http.Handler for this server.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /decide", s.handleDecide)
+	return mux
+}
+
+// RunRelockTicker polls model time every pollInterval (a wall-clock
+// operational cadence, design-specification.md section 4.3.3) and relocks
+// any door whose relock timer has expired in model time. It runs until ctx
+// is canceled.
+func (s *Server) RunRelockTicker(ctx context.Context, pollInterval time.Duration) {
+	ticker := time.NewTicker(pollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			s.checkRelockTimers()
+		}
+	}
+}
+
+func (s *Server) checkRelockTimers() {
+	var modelTimeResp struct {
+		ModelTime string `json:"model_time"`
+	}
+	if err := httpx.GetJSON(s.simulatorBaseURL+"/modeltime", &modelTimeResp); err != nil {
+		log.Printf("decision: read model time: %v", err)
+		return
+	}
+	now, err := modeltime.Parse(modelTimeResp.ModelTime)
+	if err != nil {
+		log.Printf("decision: parse model time: %v", err)
+		return
+	}
+
+	s.mu.Lock()
+	var expired []string
+	for doorID, state := range s.pending {
+		if !now.Before(state.unlockModelTime.Add(relockTimeout)) {
+			expired = append(expired, doorID)
+		}
+	}
+	s.mu.Unlock()
+
+	for _, doorID := range expired {
+		s.relockOnTimeout(doorID, now)
+	}
+}
+
+// relockOnTimeout implements design-specification.md section 9.3: no
+// door-open observation within 10 model seconds produces a
+// DOOR_NOT_OPENED event and a LOCK command.
+func (s *Server) relockOnTimeout(doorID string, now time.Time) {
+	s.mu.Lock()
+	state, ok := s.pending[doorID]
+	if ok {
+		delete(s.pending, doorID)
+	}
+	s.mu.Unlock()
+	if !ok {
+		return // already relocked by a concurrent tick
+	}
+
+	nowStr := modeltime.Format(now)
+
+	event := contracts.DoorEvent{
+		EventType:  contracts.DoorEventNotOpened,
+		DoorID:     doorID,
+		DecisionID: state.decisionID,
+		ModelTime:  nowStr,
+	}
+	if err := httpx.PostJSON(s.eventDataBaseURL+"/events", event, nil); err != nil {
+		log.Printf("decision: post DOOR_NOT_OPENED event: %v", err)
+	}
+
+	command := contracts.ActuatorCommand{
+		CommandID:  idgen.New(),
+		DecisionID: state.decisionID,
+		DoorID:     doorID,
+		Action:     contracts.ActionLock,
+		Reason:     contracts.ReasonRelockTimeout,
+		ModelTime:  nowStr,
+	}
+	s.issueCommand(command)
+}
+
+// handleDecide evaluates a validated AccessAttemptObservation and
+// produces a final AccessDecision (design-specification.md sections 5-8).
+func (s *Server) handleDecide(w http.ResponseWriter, r *http.Request) {
+	var obs contracts.AccessAttemptObservation
+	if err := json.NewDecoder(r.Body).Decode(&obs); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	auth := authorize(s.cfg, obs.CardID, obs.DoorID, obs.Direction)
+
+	decision := contracts.AccessDecision{
+		DecisionID:          idgen.New(),
+		EventID:             obs.EventID,
+		DoorID:              obs.DoorID,
+		Direction:           obs.Direction,
+		AuthorizationResult: auth.result,
+		AuthorizationReason: auth.reason,
+		AnomalyResult:       contracts.AnomalyNotEvaluated,
+		ModelTime:           obs.ModelTime,
+		PolicyVersion:       contracts.PolicyVersion,
+	}
+
+	// Decision Policy (design-specification.md section 7.3): with no
+	// anomaly result evaluated, the final action equals the authorization
+	// result. This is REQ-DEC-003/§8.2 made structurally true: nothing in
+	// this function can turn a DENY into ALLOW.
+	if auth.result == contracts.AuthResultAllow {
+		decision.FinalAction = contracts.FinalActionAllow
+	} else {
+		decision.FinalAction = contracts.FinalActionDeny
+	}
+
+	if err := httpx.PostJSON(s.eventDataBaseURL+"/decisions", decision, nil); err != nil {
+		log.Printf("decision: post decision evidence: %v", err)
+	}
+
+	if decision.FinalAction == contracts.FinalActionAllow {
+		// Runtime Assurance (design-specification.md section 8.2): the
+		// only hard constraint reachable on this path is "valid,
+		// authorized ALLOW may unlock" — a DENY never reaches here.
+		s.issueUnlock(decision)
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) issueUnlock(decision contracts.AccessDecision) {
+	unlockModelTime, err := modeltime.Parse(decision.ModelTime)
+	if err != nil {
+		log.Printf("decision: parse decision model time: %v", err)
+		return
+	}
+
+	command := contracts.ActuatorCommand{
+		CommandID:  idgen.New(),
+		DecisionID: decision.DecisionID,
+		DoorID:     decision.DoorID,
+		Action:     contracts.ActionUnlock,
+		Reason:     contracts.ReasonAllowUnlock,
+		ModelTime:  decision.ModelTime,
+	}
+	if !s.issueCommand(command) {
+		return
+	}
+
+	s.mu.Lock()
+	s.pending[decision.DoorID] = doorControlState{
+		decisionID:      decision.DecisionID,
+		unlockModelTime: unlockModelTime,
+	}
+	s.mu.Unlock()
+}
+
+// issueCommand sends cmd to the Door Actuator for execution and, per
+// ADR-005, separately returns it to the Event/Data Service for
+// persistence (docs/data-contracts.md section 6: "command" is a retained
+// evidence type, distinct from its eventual outcome). It reports whether
+// the actuator accepted the command.
+func (s *Server) issueCommand(cmd contracts.ActuatorCommand) bool {
+	if err := httpx.PostJSON(s.eventDataBaseURL+"/commands", cmd, nil); err != nil {
+		log.Printf("decision: post command evidence: %v", err)
+	}
+	if err := httpx.PostJSON(s.actuatorBaseURL+"/commands", cmd, nil); err != nil {
+		log.Printf("decision: post command to actuator: %v", err)
+		return false
+	}
+	return true
+}

@@ -181,17 +181,15 @@ This distinction allows sensor delay, stale data, missing observations, and sens
 
 ### 2.9 DoorStateSensor
 
-A DoorStateSensor observes the physical state of a controlled door.
+A DoorStateSensor observes the physical state of a controlled door, reported
+as the two independent fields defined in §9.1:
 
-Possible observed states include:
+- `door_position`: `OPEN` | `CLOSED` | `BLOCKED`
+- `lock_state`: `UNLOCKED` | `LOCKED` | `JAMMED`
 
-- OPEN
-- CLOSED
-- LOCKED
-- UNLOCKED
-- UNKNOWN
-
-The exact states supported depend on the BuildSim door interface and will be finalized after verification against the local BuildSim API documentation.
+A `verification` value is not itself observed by this sensor; it is computed
+by whichever component compares a commanded `lock_state` against this
+sensor's reported value (§9.5, §9.6).
 
 A DoorStateSensor:
 - has a stable device identifier
@@ -205,8 +203,8 @@ The observed state is distinct from the requested actuator state.
 For example:
 
 ```text
-commanded state = UNLOCKED
-observed state  = LOCKED
+commanded lock_state = UNLOCKED
+observed lock_state  = LOCKED
 ```
 
 represents an actuator or communication failure rather than a successful unlock.
@@ -373,8 +371,6 @@ Examples include:
 The Scenario does not define the canonical system configuration. Users, doors, zones, and devices are configured separately and referenced by the scenario.
 
 ---
-
-## 4. State Ownership
 
 ## 4. State Ownership
 
@@ -955,44 +951,53 @@ A controlled door begins in a known safe state.
 The normal initial state is:
 
 ```text
-LOCKED
+lock_state    = LOCKED
+door_position = CLOSED
+verification  = CONFIRMED
 ```
 
 ### 9.1 Logical Door States
 
-The initial logical state model includes:
+door_position:
+    OPEN | CLOSED | BLOCKED
 
-- `LOCKED`
-- `UNLOCKED`
-- `OPEN`
-- `CLOSED_UNLOCKED`
-- `UNVERIFIED`
+lock_state:
+    UNLOCKED | LOCKED | JAMMED
 
-The exact mapping to BuildSim state values will be finalized after verification of the BuildSim door API.
+verification:
+    CONFIRMED | UNVERIFIED | UNKNOWN
 
 ### 9.2 Normal Authorized Transition
 
-The normal successful sequence is:
+The normal successful sequence, tracked as the three independent fields
+defined in §9.1, is:
 
 ```text
-LOCKED
+lock_state=LOCKED,   door_position=CLOSED, verification=CONFIRMED
   |
-  | valid ALLOW decision
+  | valid ALLOW decision -> UNLOCK command confirmed
   v
-UNLOCKED
+lock_state=UNLOCKED, door_position=CLOSED, verification=CONFIRMED
   |
   | occupant opens door
   v
-OPEN
+lock_state=UNLOCKED, door_position=OPEN,   verification=CONFIRMED
   |
   | passage completes / door closes
   v
-CLOSED_UNLOCKED
+lock_state=UNLOCKED, door_position=CLOSED, verification=CONFIRMED
   |
-  | relock command succeeds
+  | relock command confirmed
   v
-LOCKED
+lock_state=LOCKED,   door_position=CLOSED, verification=CONFIRMED
 ```
+
+`door_position` and `lock_state` vary independently; a door may, for
+example, be observed `OPEN` while `lock_state` is still `UNLOCKED` from an
+earlier command. The two intermediate rows above are the same
+`(UNLOCKED, CLOSED)` pair occurring before and after passage — there is no
+separate named state for it, which is why this specification no longer uses
+a single flattened enum value for door state (see §9.1).
 
 ### 9.3 Unlock Timeout
 
@@ -1012,31 +1017,31 @@ The timer uses model time as required by REQ-FUNC-003.
 A denied access attempt shall not change the door from its locked state.
 
 ```text
-LOCKED
+lock_state=LOCKED, door_position=CLOSED, verification=CONFIRMED
   |
   | DENY
   v
-LOCKED
+lock_state=LOCKED, door_position=CLOSED, verification=CONFIRMED
 ```
 
 No occupant crossing shall occur.
 
 ### 9.5 Unverified Actuation
 
-If an actuator command is issued but the resulting physical state cannot be confirmed, the door enters an `UNVERIFIED` logical condition for control and monitoring purposes.
+If an actuator command is issued but the resulting physical state cannot be confirmed, `verification` becomes `UNVERIFIED` for that door. `door_position` is unaffected by a lock/unlock command and keeps its last-confirmed value; only `lock_state` is uncertain.
 
 For example:
 
 ```text
-LOCKED
+lock_state=LOCKED,              door_position=CLOSED, verification=CONFIRMED
   |
   | UNLOCK command sent
   | confirmation unavailable
   v
-UNVERIFIED
+lock_state=UNLOCKED (requested, not confirmed), door_position=CLOSED, verification=UNVERIFIED
 ```
 
-`UNVERIFIED` means the system does not know whether the requested physical transition occurred.
+`verification=UNVERIFIED` means the system does not know whether the requested `lock_state` transition occurred.
 
 The system shall not represent the requested command state as confirmed physical truth.
 
@@ -1054,7 +1059,7 @@ The access-control system may maintain logical control state needed for:
 
 Such logical state does not replace BuildSim as the source of current physical state.
 
-### 9.6 Door-Control Ownership
+### 9.7 Door-Control Ownership
 
 The Autonomous Decision Service owns the logical per-door control state used to manage an active access cycle.
 
@@ -1329,6 +1334,21 @@ The exact BuildSim API representation of:
 must be verified against the local BuildSim documentation before implementation.
 
 No API behavior shall be assumed from this specification alone.
+
+Confirmed against the local BuildSim API documentation and source
+(`PUT /api/doors`, `pkg/store/memory.go` `SetDoors`): BuildSim replaces its
+entire door collection on every `PUT /api/doors` call; it does not upsert a
+single door by ID. The real `BuildSimClient` adapter (not yet implemented)
+must therefore perform `GET /api/doors`, replace only its own door's entry
+in the returned collection, and `PUT` the full collection back, inside a
+single `SetDoorState` call. This read-modify-write sequence is an adapter
+implementation detail and shall not leak into the `BuildSimClient`
+interface or into any caller of it. `BuildSimClient` also has no
+asynchronous confirmation from BuildSim itself: a successful write is
+immediately consistent, so `verification=UNVERIFIED` is produced only by
+the adapter's own failure/timeout handling, never by a BuildSim response.
+The `FakeBuildSimClient` used for automated tests needs neither behavior,
+since it holds a single door directly in memory.
 
 ### 12.4 Anomaly Detection Method
 
