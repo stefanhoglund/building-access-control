@@ -1,0 +1,7 @@
+=== decisions produced by the four scenarios above ===
+model_time=2026-10-08T10:00:00Z auth=ALLOW/ROLE_ALLOW final=ALLOW anomaly=NORMAL/NORMAL alert=False
+model_time=2026-10-08T10:00:00Z auth=DENY/NO_PERMISSION final=DENY anomaly=NORMAL/NORMAL alert=False
+model_time=2026-10-08T03:00:00Z auth=ALLOW/ROLE_ALLOW final=ALLOW anomaly=ANOMALOUS/UNUSUAL_ACCESS_TIME alert=True
+model_time=2026-10-08T10:00:00Z auth=ALLOW/ROLE_ALLOW final=ALLOW anomaly=NORMAL/NORMAL alert=False
+model_time=2026-10-08T10:00:01Z auth=ALLOW/ROLE_ALLOW final=ALLOW anomaly=ANOMALOUS/REPEATED_ATTEMPT alert=True
+model_time=2026-10-08T10:00:02Z auth=ALLOW/ROLE_ALLOW final=ALLOW anomaly=ANOMALOUS/REPEATED_ATTEMPT alert=True

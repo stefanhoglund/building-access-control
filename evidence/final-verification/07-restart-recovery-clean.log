@@ -1,0 +1,10 @@
+=== pending queue drained? ===
+
+status=204
+
+=== door state (expected: still unlocked from prior overlap artifact) ===
+
+=== one clean isolated authorized-passage to confirm real recovery ===
+{"run_id":"b23d729d-6485-3655-1525-d2ef552a889a","scenario":"authorized-passage","seed":99,"model_start":"2026-10-08T10:00:00Z","steps_executed":1,"card_ids":["card-alice"]}
+
+door-1 after clean isolated attempt: 

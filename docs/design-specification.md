@@ -776,12 +776,14 @@ Conceptually, an AccessDecision contains:
 - quality/degraded-state information
 - policy version
 
-The initial final actions are:
+The final actions are:
 
 - `ALLOW`
 - `DENY`
-- `ALLOW_WITH_ALERT`
-- `DENY_WITH_ALERT`
+
+An alert is recorded as a separate field from the final action (section
+9.7), not as a combined value — `ALLOW_WITH_ALERT`/`DENY_WITH_ALERT` were
+an earlier, now-superseded notation for the same thing.
 
 Additional operational states such as actuator failure or unverified physical state are recorded separately from the access authorization decision.
 
@@ -790,12 +792,12 @@ Additional operational states such as actuator failure or unverified physical st
 The initial policy is:
 
 ```text
-Authorization    Anomaly        Final Decision
--------------    -----------    ----------------
-ALLOW            NORMAL         ALLOW
-ALLOW            ANOMALOUS      ALLOW_WITH_ALERT
-DENY             NORMAL         DENY
-DENY             ANOMALOUS      DENY_WITH_ALERT
+Authorization    Anomaly        Final Action    Alert
+-------------    -----------    ------------    -----
+ALLOW            NORMAL         ALLOW           no
+ALLOW            ANOMALOUS      ALLOW           yes
+DENY             NORMAL         DENY             no
+DENY             ANOMALOUS      DENY             yes
 ```
 
 The anomaly result does not change whether an otherwise unauthorized access attempt is permitted.
@@ -1365,6 +1367,8 @@ Candidate approaches may include:
 
 The selected learned or statistical approach should be compared against a simple deterministic baseline using identical scenarios and seeds.
 
+A deterministic rule-based baseline is implemented (`internal/decision/anomaly.go`): two weighted factors, an unusual-access-time window and a repeated-attempt window (both evaluated against model time), summed and compared against a fixed threshold. A destination/zone-unusualness factor is deliberately not implemented yet: this project's current configuration has one controlled door, so no such factor could ever vary or be falsified by a test — it is a natural extension once a second door exists, not an architectural gap. No learned model has been evaluated against this baseline.
+
 ### 12.5 Anomaly Thresholds
 
 The following remain to be determined experimentally:
@@ -1375,6 +1379,8 @@ The following remain to be determined experimentally:
 - behavior when required features are unavailable
 
 Thresholds should be selected from evaluation evidence rather than chosen arbitrarily.
+
+Initial placeholder values (`internal/decision/anomaly.go`): normal access window 07:00-19:00 model time, repeated-attempt window 5 model seconds, each contributing 0.6 to the score, classified ANOMALOUS at a summed score >= 0.5. These are a defensible starting baseline (docs/data-contracts.md documents the exact evidence fields), not values derived from a real evaluation data set — there is no such data set for this project. Revisit once anomaly evaluation scenarios (section 12.5 of the evaluation plan) accumulate evidence.
 
 ### 12.6 Freshness Thresholds
 

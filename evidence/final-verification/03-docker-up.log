@@ -1,0 +1,63 @@
+=== docker compose up -d ===
+ Network applied-ai-edge-computing_default  Creating
+ Network applied-ai-edge-computing_default  Created
+ Container applied-ai-edge-computing-buildsim-1  Creating
+ Container applied-ai-edge-computing-buildsim-1  Created
+ Container applied-ai-edge-computing-door-seed-1  Creating
+ Container applied-ai-edge-computing-door-seed-1  Created
+ Container applied-ai-edge-computing-simulator-1  Creating
+ Container applied-ai-edge-computing-simulator-1  Created
+ Container applied-ai-edge-computing-eventdata-1  Creating
+ Container applied-ai-edge-computing-eventdata-1  Created
+ Container applied-ai-edge-computing-occupancysensor-1  Creating
+ Container applied-ai-edge-computing-cardreader-1  Creating
+ Container applied-ai-edge-computing-decision-1  Creating
+ Container applied-ai-edge-computing-doorstatesensor-1  Creating
+ Container applied-ai-edge-computing-dashboard-1  Creating
+ Container applied-ai-edge-computing-actuator-1  Creating
+ Container applied-ai-edge-computing-actuator-1  Created
+ Container applied-ai-edge-computing-decision-1  Created
+ Container applied-ai-edge-computing-occupancysensor-1  Created
+ Container applied-ai-edge-computing-cardreader-1  Created
+ Container applied-ai-edge-computing-doorstatesensor-1  Created
+ Container applied-ai-edge-computing-dashboard-1  Created
+ Container applied-ai-edge-computing-buildsim-1  Starting
+ Container applied-ai-edge-computing-buildsim-1  Started
+ Container applied-ai-edge-computing-buildsim-1  Waiting
+ Container applied-ai-edge-computing-buildsim-1  Healthy
+ Container applied-ai-edge-computing-door-seed-1  Starting
+ Container applied-ai-edge-computing-door-seed-1  Started
+ Container applied-ai-edge-computing-door-seed-1  Waiting
+ Container applied-ai-edge-computing-door-seed-1  Exited
+ Container applied-ai-edge-computing-simulator-1  Starting
+ Container applied-ai-edge-computing-simulator-1  Started
+ Container applied-ai-edge-computing-eventdata-1  Starting
+ Container applied-ai-edge-computing-eventdata-1  Started
+ Container applied-ai-edge-computing-occupancysensor-1  Starting
+ Container applied-ai-edge-computing-dashboard-1  Starting
+ Container applied-ai-edge-computing-cardreader-1  Starting
+ Container applied-ai-edge-computing-door-seed-1  Waiting
+ Container applied-ai-edge-computing-decision-1  Starting
+ Container applied-ai-edge-computing-door-seed-1  Waiting
+ Container applied-ai-edge-computing-dashboard-1  Started
+ Container applied-ai-edge-computing-cardreader-1  Started
+ Container applied-ai-edge-computing-decision-1  Started
+ Container applied-ai-edge-computing-occupancysensor-1  Started
+ Container applied-ai-edge-computing-door-seed-1  Exited
+ Container applied-ai-edge-computing-actuator-1  Starting
+ Container applied-ai-edge-computing-door-seed-1  Exited
+ Container applied-ai-edge-computing-doorstatesensor-1  Starting
+ Container applied-ai-edge-computing-actuator-1  Started
+ Container applied-ai-edge-computing-doorstatesensor-1  Started
+
+=== docker compose ps ===
+NAME                                          IMAGE                                COMMAND                  SERVICE           CREATED          STATUS                   PORTS
+applied-ai-edge-computing-actuator-1          access-control:latest                "/app/bin/actuator -…"   actuator          10 seconds ago   Up 2 seconds             
+applied-ai-edge-computing-buildsim-1          applied-ai-edge-computing-buildsim   "/buildsim start --h…"   buildsim          10 seconds ago   Up 9 seconds (healthy)   127.0.0.1:9090->9090/tcp
+applied-ai-edge-computing-cardreader-1        access-control:latest                "/app/bin/cardreader…"   cardreader        10 seconds ago   Up 2 seconds             
+applied-ai-edge-computing-dashboard-1         access-control:latest                "/app/bin/dashboard …"   dashboard         10 seconds ago   Up 2 seconds             127.0.0.1:8085->8085/tcp
+applied-ai-edge-computing-decision-1          access-control:latest                "/app/bin/decision -…"   decision          10 seconds ago   Up 2 seconds             
+applied-ai-edge-computing-doorstatesensor-1   access-control:latest                "/app/bin/doorstates…"   doorstatesensor   10 seconds ago   Up 2 seconds             
+applied-ai-edge-computing-eventdata-1         access-control:latest                "/app/bin/eventdata …"   eventdata         10 seconds ago   Up 2 seconds             
+applied-ai-edge-computing-occupancysensor-1   access-control:latest                "/app/bin/occupancys…"   occupancysensor   10 seconds ago   Up 2 seconds             
+applied-ai-edge-computing-simulator-1         access-control:latest                "/app/bin/simulator …"   simulator         10 seconds ago   Up 3 seconds             127.0.0.1:8081->8081/tcp

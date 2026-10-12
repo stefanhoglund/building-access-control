@@ -1,0 +1,56 @@
+direction: down
+
+# C4 Level 3: zoom into the Autonomous Decision Service
+# (architecture.md section 5.5, ADR-002: logically separate modules
+# colocated in one process).
+
+decision_service: Autonomous Decision Service {
+  style.stroke-dash: 4
+  style.fill: transparent
+
+  http: HTTP Handlers {
+    tooltip: "POST /decide, POST /door-state-observations (server.go)"
+  }
+
+  authorization: Authorization Module {
+    tooltip: "authz.go — ADR-001 precedence chain. Answers: is this permitted?"
+  }
+
+  anomaly: Anomaly Module {
+    tooltip: "anomaly.go — deterministic rule-based scorer (unusual time, repeated attempts). Answers: is this unusual? Never reads the authorization result."
+  }
+
+  policy: Decision Policy {
+    tooltip: "Combines authorization + anomaly into final_action (from authorization only) and alert (from anomaly only)."
+  }
+
+  assurance: Runtime Assurance {
+    tooltip: "Hard constraint: only an ALLOW final_action may produce an UNLOCK command."
+  }
+
+  door_control: Door-Control State {
+    shape: cylinder
+    style.fill: "#2a3a5c"
+    tooltip: "In-memory per-door pending state + relock timer (section 9.7). Lost on restart by design — see REQ-RES-004 evidence."
+  }
+
+  http -> authorization: card_id, door_id, direction, model_time
+  http -> anomaly: card_id, model_time
+  authorization -> policy: ALLOW|DENY + reason
+  anomaly -> policy: NORMAL|ANOMALOUS + score/reason
+  policy -> assurance: proposed final_action + alert
+  assurance -> door_control: on ALLOW, arm the 10-model-second relock timer
+  door_control -> assurance: OPEN/CLOSED observation -> disarm timeout / relock-after-passage
+}
+
+eventdata: Event & Data Service
+actuator: Door Actuator Processes
+simulator: Occupant & Movement Simulator {
+  tooltip: "Queried only for model time (GET /modeltime), by the relock ticker"
+}
+
+eventdata -> decision_service.http: "POST /decide"
+decision_service.http -> eventdata: "POST /decisions (evidence)"
+eventdata -> decision_service.http: "POST /door-state-observations (forwarded from DoorStateSensor)"
+decision_service.assurance -> actuator: "POST /commands (UNLOCK | LOCK)"
+decision_service.door_control -> simulator: "GET /modeltime (relock ticker, wall-clock poll)"

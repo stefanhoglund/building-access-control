@@ -75,11 +75,11 @@ func authorize(cfg *config.Config, cardID, doorID, direction string) authResult 
 
 	switch {
 	case userDeny:
-		return authResult{result: contracts.AuthResultDeny, reason: "USER_DENY"}
+		return authResult{result: contracts.AuthResultDeny, reason: contracts.ReasonUserDeny}
 	case userAllow:
-		return authResult{result: contracts.AuthResultAllow, reason: "USER_ALLOW"}
+		return authResult{result: contracts.AuthResultAllow, reason: contracts.ReasonUserAllow}
 	case roleDeny:
-		return authResult{result: contracts.AuthResultDeny, reason: "ROLE_DENY"}
+		return authResult{result: contracts.AuthResultDeny, reason: contracts.ReasonRoleDeny}
 	case roleAllow:
 		return authResult{result: contracts.AuthResultAllow, reason: contracts.ReasonRoleAllow}
 	default:

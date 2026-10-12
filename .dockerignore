@@ -1,0 +1,8 @@
+.git
+.run
+bin
+data
+evidence
+docs/internal
+docs/figures
+*.md

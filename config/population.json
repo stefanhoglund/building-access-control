@@ -1,0 +1,13 @@
+{
+  "_comment": "Simulation-domain population data only (design-specification.md section 3.1 SimulatedPerson / 3.2 Schedule). Deliberately separate from config/system-config.json (ADR-004 System Configuration): a person's normal access-hour window here describes typical behavior for scenario generation, it does not grant or restrict permission. Authorization for each card_id is decided purely from system-config.json's users/roles/permissions.",
+  "people": [
+    { "person_id": "alice", "card_id": "card-alice", "role_label": "employee", "normal_hour_start": 8, "normal_hour_end": 17 },
+    { "person_id": "bob", "card_id": "card-bob", "role_label": "employee", "normal_hour_start": 7, "normal_hour_end": 16 },
+    { "person_id": "carol", "card_id": "card-carol", "role_label": "facilities", "normal_hour_start": 6, "normal_hour_end": 14 },
+    { "person_id": "dave", "card_id": "card-dave", "role_label": "manager", "normal_hour_start": 8, "normal_hour_end": 18 },
+    { "person_id": "erin", "card_id": "card-erin", "role_label": "visitor", "normal_hour_start": 10, "normal_hour_end": 16 },
+    { "person_id": "frank", "card_id": "card-frank", "role_label": "visitor", "normal_hour_start": 10, "normal_hour_end": 16 },
+    { "person_id": "grace", "card_id": "card-grace", "role_label": "student", "normal_hour_start": 9, "normal_hour_end": 20 },
+    { "person_id": "henry", "card_id": "card-henry", "role_label": "employee", "normal_hour_start": 8, "normal_hour_end": 17 }
+  ]
+}

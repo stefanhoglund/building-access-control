@@ -1,0 +1,31 @@
+    decision_restart_test.go:219: RECOVERY TIME (restart issued -> first correct ALLOW/UNLOCK): 10.868282ms
+    decision_restart_test.go:220: TOTAL OUTAGE (decision unavailable -> recovered): 244.917441ms
+--- PASS: TestDecisionServiceFailClosedAndRestartRecovers (0.25s)
+    decision_restart_test.go:219: RECOVERY TIME (restart issued -> first correct ALLOW/UNLOCK): 10.961944ms
+    decision_restart_test.go:220: TOTAL OUTAGE (decision unavailable -> recovered): 243.62076ms
+--- PASS: TestDecisionServiceFailClosedAndRestartRecovers (0.24s)
+    decision_restart_test.go:219: RECOVERY TIME (restart issued -> first correct ALLOW/UNLOCK): 22.630642ms
+    decision_restart_test.go:220: TOTAL OUTAGE (decision unavailable -> recovered): 245.150857ms
+--- PASS: TestDecisionServiceFailClosedAndRestartRecovers (0.25s)
+    decision_restart_test.go:219: RECOVERY TIME (restart issued -> first correct ALLOW/UNLOCK): 10.829552ms
+    decision_restart_test.go:220: TOTAL OUTAGE (decision unavailable -> recovered): 245.375936ms
+--- PASS: TestDecisionServiceFailClosedAndRestartRecovers (0.25s)
+    decision_restart_test.go:219: RECOVERY TIME (restart issued -> first correct ALLOW/UNLOCK): 22.786517ms
+    decision_restart_test.go:220: TOTAL OUTAGE (decision unavailable -> recovered): 244.603174ms
+--- PASS: TestDecisionServiceFailClosedAndRestartRecovers (0.25s)
+    decision_restart_test.go:219: RECOVERY TIME (restart issued -> first correct ALLOW/UNLOCK): 32.262183ms
+    decision_restart_test.go:220: TOTAL OUTAGE (decision unavailable -> recovered): 253.605591ms
+--- PASS: TestDecisionServiceFailClosedAndRestartRecovers (0.25s)
+    decision_restart_test.go:219: RECOVERY TIME (restart issued -> first correct ALLOW/UNLOCK): 22.243613ms
+    decision_restart_test.go:220: TOTAL OUTAGE (decision unavailable -> recovered): 244.625472ms
+--- PASS: TestDecisionServiceFailClosedAndRestartRecovers (0.25s)
+    decision_restart_test.go:219: RECOVERY TIME (restart issued -> first correct ALLOW/UNLOCK): 11.169005ms
+    decision_restart_test.go:220: TOTAL OUTAGE (decision unavailable -> recovered): 244.429878ms
+--- PASS: TestDecisionServiceFailClosedAndRestartRecovers (0.25s)
+    decision_restart_test.go:219: RECOVERY TIME (restart issued -> first correct ALLOW/UNLOCK): 21.929445ms
+    decision_restart_test.go:220: TOTAL OUTAGE (decision unavailable -> recovered): 243.679377ms
+--- PASS: TestDecisionServiceFailClosedAndRestartRecovers (0.24s)
+    decision_restart_test.go:219: RECOVERY TIME (restart issued -> first correct ALLOW/UNLOCK): 21.895683ms
+    decision_restart_test.go:220: TOTAL OUTAGE (decision unavailable -> recovered): 254.98742ms
+--- PASS: TestDecisionServiceFailClosedAndRestartRecovers (0.26s)
+PASS

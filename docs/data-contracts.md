@@ -47,20 +47,35 @@ Service for persistence (ADR-005).
   "direction": "PUBLIC_TO_EMPLOYEE",
   "authorization_result": "ALLOW",
   "authorization_reason": "ROLE_ALLOW",
-  "anomaly_result": "NOT_EVALUATED",
+  "anomaly_result": "NORMAL",
+  "anomaly_reason": "NORMAL",
+  "anomaly_score": 0.0,
   "final_action": "ALLOW",
+  "alert": false,
   "model_time": "2026-10-08T08:15:30Z",
   "policy_version": "v0"
 }
 ```
 
-`authorization_reason` is one of: `ROLE_ALLOW`, `NO_PERMISSION`,
-`CARD_UNKNOWN`, `CARD_DISABLED`. Others listed in
-`design-specification.md` §5.5 are not reachable with this slice's
-configuration and are added when exercised.
+`authorization_reason` is one of: `ROLE_ALLOW`, `ROLE_DENY`,
+`USER_ALLOW`, `USER_DENY`, `NO_PERMISSION`, `CARD_UNKNOWN`,
+`CARD_DISABLED`.
 
-`anomaly_result` is always `NOT_EVALUATED` until anomaly detection exists
-(§7.4 degraded-anomaly behavior covers this case already).
+`anomaly_result` is `NORMAL` or `ANOMALOUS` (the deterministic baseline
+scorer in `internal/decision/anomaly.go` — design-specification.md §6/§12.4),
+or `NOT_EVALUATED` if the anomaly subsystem itself were ever unavailable
+(§7.4; not currently reachable, since the scorer is a pure in-process
+function that cannot fail). `anomaly_reason` is `NORMAL`, or a
+comma-separated list of the factors that fired: `UNUSUAL_ACCESS_TIME`,
+`REPEATED_ATTEMPT`. `anomaly_score` is the summed weight of those
+factors (not a probability).
+
+`final_action` depends only on `authorization_result` — never on the
+anomaly fields (REQ-DEC-003, design-specification.md §11.2). `alert` is
+`true` whenever `anomaly_result` is `ANOMALOUS`, independently of
+`final_action`: an anomalous DENY still raises an alert
+(design-specification.md §7.3). `ALLOW_WITH_ALERT`/`DENY_WITH_ALERT` as a
+combined value is superseded by this `final_action` + `alert` pair.
 
 ## 3. ActuatorCommand
 
@@ -292,6 +307,34 @@ observations.
 - Simulator `POST /modeltime/advance`: `{seconds}` — test-only deterministic
   model-time advance, avoiding real-time waits in tests (§4.3 model time is
   independent of wall-clock time).
+- Simulator `POST /scenario/run`: invokes one of the named, seeded
+  scenarios defined in `config/scenarios.json` (design-specification.md
+  §3.5, `docs/scenarios.md`). Request:
+  `{scenario, seed, count, interval_ms}` — `count`/`interval_ms` only
+  apply to (and override the configured defaults of) the `"burst"`
+  scenario kind; both are optional. The call blocks until every
+  presentation the scenario specifies has been enqueued, then responds
+  `200` with:
+  `{run_id, scenario, seed, model_start, steps_executed, card_ids}`.
+  Invoking this sets the Simulator's model clock to the scenario's
+  `model_start` (`internal/modeltime.Clock.Set`), exactly as
+  `/scenario/present` already treats model time as test/scenario-control
+  state, not device-owned state.
+
+### 10.1 Scenario-run reproducibility log (not evidence)
+
+Every `/scenario/run` call also appends one record to
+`evidence/scenarios/runs.jsonl`:
+`{run_id, scenario, seed, model_start, steps_executed, card_ids}`. This
+file is **not** part of the Historical Evidence Store (§6, ADR-005: the
+Event/Data Service is its sole writer) — it is a separate,
+Simulator-owned reproducibility log, matching design-specification.md
+§3.5's "scenario identifier... random seed" recording obligation without
+adding scenario/seed fields to `AccessAttemptObservation` or
+`AccessDecision`. A scenario's participating card_ids and model time can
+still be correlated to the observations/decisions it produced by
+model_time + card_id, exactly as any other scenario-control presentation
+already is.
 
 ## 11. BuildSim contract
 

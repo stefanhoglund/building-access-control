@@ -1,0 +1,186 @@
+# Docker Compose deployment (CLAUDE.md §3: "Docker Compose is the
+# default deployment mechanism"). One container per independently
+# deployable/restartable process (architecture.md / docs/deployment.md) —
+# nothing here is merged into a monolith. All eight project processes
+# share one multi-stage image (./Dockerfile); only the command differs
+# per service, exactly as scripts/run-local.sh already runs eight
+# separate binaries from one build. BuildSim keeps its own
+# course-provided Dockerfile/compose.yaml (docs/internal/D7065E/
+# buildingsim) unmodified (CLAUDE.md §4: do not invent BuildSim
+# behavior) — its build context is simply referenced here.
+#
+# Addressing is entirely configuration (compose `command:` flag values
+# using Docker's internal service-name DNS), not application code: no
+# cmd/*/main.go file changes were needed for this (every base-URL/listen
+# flag already defaulted to 127.0.0.1/localhost for native use; here the
+# same flags are passed different values).
+
+x-app-build: &app-build
+  context: .
+
+services:
+  buildsim:
+    build:
+      context: docs/internal/D7065E/buildingsim
+    ports:
+      - "127.0.0.1:9090:9090"
+    restart: unless-stopped
+    # CMD and HEALTHCHECK are inherited from that Dockerfile unmodified.
+
+  # One-shot init step (design-specification.md §4.4/CLAUDE.md §4:
+  # BuildSim has no persistence, so door-1 must be (re)created on every
+  # fresh stack). Equivalent to scripts/run-local.sh's seed_door, moved
+  # into the deployment itself rather than left as a manual step.
+  #
+  # --retry-all-errors is load-bearing, not decoration: `depends_on:
+  # condition: service_healthy` is only honored by `docker compose up`.
+  # A bulk `docker compose restart` (no args) restarts every container
+  # roughly in parallel instead, including buildsim and door-seed
+  # together — found during final verification to transiently fail DNS
+  # resolution of the `buildsim` hostname while that container's network
+  # attachment was still being re-established ("Could not resolve host:
+  # buildsim"), leaving door-1 unseeded. Retrying is the smallest correct
+  # fix: it makes this one-shot step robust to that race regardless of
+  # which restart path triggered it, without changing when it normally
+  # runs (still waits for buildsim healthy on a fresh `up`).
+  door-seed:
+    image: curlimages/curl:8.11.1
+    depends_on:
+      buildsim:
+        condition: service_healthy
+    command:
+      - -fsS
+      - --retry
+      - "10"
+      - --retry-all-errors
+      - --retry-delay
+      - "1"
+      - -X
+      - PUT
+      - http://buildsim:9090/api/doors
+      - -H
+      - "Content-Type: application/json"
+      - -d
+      - '[{"id":"door-1","name":"PUBLIC to EMPLOYEE door","kind":"door","level":"level0","room":"A109","state":"closed","lock_state":"locked"}]'
+    restart: "no"
+
+  simulator:
+    build: *app-build
+    image: access-control:latest
+    depends_on:
+      door-seed:
+        condition: service_completed_successfully
+    command:
+      - /app/bin/simulator
+      - -addr=:8081
+      - -buildsim-url=http://buildsim:9090
+      - -population-path=/app/config/population.json
+      - -scenarios-path=/app/config/scenarios.json
+      - -scenario-run-log-path=/app/evidence/scenarios/runs.jsonl
+    volumes:
+      - ./evidence:/app/evidence
+    ports:
+      - "127.0.0.1:8081:8081"
+    restart: unless-stopped
+
+  eventdata:
+    build: *app-build
+    image: access-control:latest
+    depends_on:
+      - simulator
+    command:
+      - /app/bin/eventdata
+      - -addr=:8082
+      - -decision-url=http://decision:8083
+      - -evidence-path=/app/data/evidence.jsonl
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  decision:
+    build: *app-build
+    image: access-control:latest
+    depends_on:
+      - eventdata
+    command:
+      - /app/bin/decision
+      - -addr=:8083
+      - -config=/app/config/system-config.json
+      - -eventdata-url=http://eventdata:8082
+      - -actuator-url=http://actuator:8084
+      - -simulator-url=http://simulator:8081
+    restart: unless-stopped
+
+  actuator:
+    build: *app-build
+    image: access-control:latest
+    depends_on:
+      door-seed:
+        condition: service_completed_successfully
+      eventdata:
+        condition: service_started
+    command:
+      - /app/bin/actuator
+      - -addr=:8084
+      - -eventdata-url=http://eventdata:8082
+      - -buildsim-url=http://buildsim:9090
+    restart: unless-stopped
+
+  cardreader:
+    build: *app-build
+    image: access-control:latest
+    depends_on:
+      - simulator
+      - eventdata
+    command:
+      - /app/bin/cardreader
+      - -reader-id=reader-1
+      - -simulator-url=http://simulator:8081
+      - -eventdata-url=http://eventdata:8082
+    restart: unless-stopped
+
+  occupancysensor:
+    build: *app-build
+    image: access-control:latest
+    depends_on:
+      - simulator
+      - eventdata
+    command:
+      - /app/bin/occupancysensor
+      - -source-id=occupancysensor-1
+      - -room=level0/A109
+      - -simulator-url=http://simulator:8081
+      - -eventdata-url=http://eventdata:8082
+    restart: unless-stopped
+
+  doorstatesensor:
+    build: *app-build
+    image: access-control:latest
+    depends_on:
+      door-seed:
+        condition: service_completed_successfully
+      eventdata:
+        condition: service_started
+    command:
+      - /app/bin/doorstatesensor
+      - -source-id=doorstatesensor-1
+      - -door-id=door-1
+      - -buildsim-url=http://buildsim:9090
+      - -simulator-url=http://simulator:8081
+      - -eventdata-url=http://eventdata:8082
+    restart: unless-stopped
+
+  dashboard:
+    build: *app-build
+    image: access-control:latest
+    depends_on:
+      - eventdata
+    command:
+      - /app/bin/dashboard
+      - -addr=:8085
+      - -evidence-path=/app/data/evidence.jsonl
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "127.0.0.1:8085:8085"
+    restart: unless-stopped

@@ -1,0 +1,29 @@
+=== evidence line counts before restart ===
+     274 data/evidence.jsonl
+      19 evidence/scenarios/runs.jsonl
+     293 total
+
+=== restart decision ===
+
+=== fresh authorized-passage after decision restart ===
+{"run_id":"f3b5ed33-efdb-a02c-a4a2-a86074e65199","scenario":"authorized-passage","seed":42,"model_start":"2026-10-08T10:00:00Z","steps_executed":1,"card_ids":["card-alice"]}
+
+door-1 after restart+fresh attempt: unlocked closed
+
+=== full stack restart, check evidence persistence ===
+=== evidence line counts after full restart ===
+     282 data/evidence.jsonl
+      20 evidence/scenarios/runs.jsonl
+     302 total
+
+=== containers after restart ===
+NAME                                          IMAGE                                COMMAND                  SERVICE           CREATED          STATUS                            PORTS
+applied-ai-edge-computing-actuator-1          access-control:latest                "/app/bin/actuator -…"   actuator          48 seconds ago   Up 3 seconds                      
+applied-ai-edge-computing-buildsim-1          applied-ai-edge-computing-buildsim   "/buildsim start --h…"   buildsim          48 seconds ago   Up 4 seconds (health: starting)   127.0.0.1:9090->9090/tcp
+applied-ai-edge-computing-cardreader-1        access-control:latest                "/app/bin/cardreader…"   cardreader        48 seconds ago   Up 4 seconds                      
+applied-ai-edge-computing-dashboard-1         access-control:latest                "/app/bin/dashboard …"   dashboard         48 seconds ago   Up 4 seconds                      127.0.0.1:8085->8085/tcp
+applied-ai-edge-computing-decision-1          access-control:latest                "/app/bin/decision -…"   decision          48 seconds ago   Up 3 seconds                      
+applied-ai-edge-computing-doorstatesensor-1   access-control:latest                "/app/bin/doorstates…"   doorstatesensor   48 seconds ago   Up 4 seconds                      
+applied-ai-edge-computing-eventdata-1         access-control:latest                "/app/bin/eventdata …"   eventdata         48 seconds ago   Up 4 seconds                      
+applied-ai-edge-computing-occupancysensor-1   access-control:latest                "/app/bin/occupancys…"   occupancysensor   48 seconds ago   Up 4 seconds                      
+applied-ai-edge-computing-simulator-1         access-control:latest                "/app/bin/simulator …"   simulator         48 seconds ago   Up 3 seconds                      127.0.0.1:8081->8081/tcp

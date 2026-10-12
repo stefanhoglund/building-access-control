@@ -45,6 +45,7 @@ type Server struct {
 	eventDataBaseURL string
 	actuatorBaseURL  string
 	simulatorBaseURL string
+	anomaly          *anomalyTracker
 
 	mu      sync.Mutex
 	pending map[string]doorControlState // keyed by door_id
@@ -57,6 +58,7 @@ func New(cfg *config.Config, eventDataBaseURL, actuatorBaseURL, simulatorBaseURL
 		eventDataBaseURL: eventDataBaseURL,
 		actuatorBaseURL:  actuatorBaseURL,
 		simulatorBaseURL: simulatorBaseURL,
+		anomaly:          newAnomalyTracker(),
 		pending:          make(map[string]doorControlState),
 	}
 }
@@ -218,6 +220,16 @@ func (s *Server) handleDecide(w http.ResponseWriter, r *http.Request) {
 
 	auth := authorize(s.cfg, obs.CardID, obs.DoorID, obs.Direction)
 
+	// Anomaly detection (anomaly.go) is evaluated entirely independently
+	// of auth above: it is never given the authorization result, and its
+	// result is never read by the two lines that set FinalAction below.
+	// This is REQ-DEC-002/003 made structurally true, not just asserted.
+	anomalyModelTime, err := modeltime.Parse(obs.ModelTime)
+	if err != nil {
+		log.Printf("decision: parse observation model time for anomaly scoring: %v", err)
+	}
+	anom := s.anomaly.score(obs.CardID, anomalyModelTime)
+
 	decision := contracts.AccessDecision{
 		DecisionID:          idgen.New(),
 		EventID:             obs.EventID,
@@ -225,15 +237,19 @@ func (s *Server) handleDecide(w http.ResponseWriter, r *http.Request) {
 		Direction:           obs.Direction,
 		AuthorizationResult: auth.result,
 		AuthorizationReason: auth.reason,
-		AnomalyResult:       contracts.AnomalyNotEvaluated,
+		AnomalyResult:       anom.classification,
+		AnomalyReason:       anom.reason,
+		AnomalyScore:        anom.score,
+		Alert:               anom.classification == contracts.AnomalyAnomalous,
 		ModelTime:           obs.ModelTime,
 		PolicyVersion:       contracts.PolicyVersion,
 	}
 
-	// Decision Policy (design-specification.md section 7.3): with no
-	// anomaly result evaluated, the final action equals the authorization
-	// result. This is REQ-DEC-003/§8.2 made structurally true: nothing in
-	// this function can turn a DENY into ALLOW.
+	// Decision Policy (design-specification.md section 7.3): the final
+	// action depends solely on auth.result. This is REQ-DEC-003/section
+	// 8.2 made structurally true: nothing in this function, including the
+	// anomaly outcome computed above, can turn a DENY into ALLOW — Alert
+	// is the only place the anomaly result is expressed.
 	if auth.result == contracts.AuthResultAllow {
 		decision.FinalAction = contracts.FinalActionAllow
 	} else {

@@ -19,20 +19,55 @@
   ],
   "roles": [
     { "role_id": "employee" },
-    { "role_id": "visitor" }
+    { "role_id": "visitor" },
+    { "role_id": "facilities" },
+    { "role_id": "manager" },
+    { "role_id": "student" }
   ],
   "users": [
     { "user_id": "user-allow", "roles": ["employee"] },
-    { "user_id": "user-deny", "roles": ["visitor"] }
+    { "user_id": "user-deny", "roles": ["visitor"] },
+    { "user_id": "user-alice", "roles": ["employee"] },
+    { "user_id": "user-bob", "roles": ["employee"] },
+    { "user_id": "user-carol", "roles": ["facilities"] },
+    { "user_id": "user-dave", "roles": ["manager"] },
+    { "user_id": "user-erin", "roles": ["visitor"] },
+    { "user_id": "user-frank", "roles": ["visitor"] },
+    { "user_id": "user-grace", "roles": ["student"] },
+    { "user_id": "user-henry", "roles": ["employee"] }
   ],
   "access_cards": [
     { "card_id": "card-allow", "user_id": "user-allow", "status": "ACTIVE" },
-    { "card_id": "card-deny", "user_id": "user-deny", "status": "ACTIVE" }
+    { "card_id": "card-deny", "user_id": "user-deny", "status": "ACTIVE" },
+    { "card_id": "card-alice", "user_id": "user-alice", "status": "ACTIVE" },
+    { "card_id": "card-bob", "user_id": "user-bob", "status": "ACTIVE" },
+    { "card_id": "card-carol", "user_id": "user-carol", "status": "ACTIVE" },
+    { "card_id": "card-dave", "user_id": "user-dave", "status": "ACTIVE" },
+    { "card_id": "card-erin", "user_id": "user-erin", "status": "ACTIVE" },
+    { "card_id": "card-frank", "user_id": "user-frank", "status": "ACTIVE" },
+    { "card_id": "card-grace", "user_id": "user-grace", "status": "ACTIVE" },
+    { "card_id": "card-henry", "user_id": "user-henry", "status": "ACTIVE" }
   ],
   "permissions": [
     {
       "subject_type": "ROLE",
       "subject_id": "employee",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "effect": "ALLOW",
+      "enabled": true
+    },
+    {
+      "subject_type": "ROLE",
+      "subject_id": "facilities",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "effect": "ALLOW",
+      "enabled": true
+    },
+    {
+      "subject_type": "ROLE",
+      "subject_id": "manager",
       "door_id": "door-1",
       "direction": "PUBLIC_TO_EMPLOYEE",
       "effect": "ALLOW",

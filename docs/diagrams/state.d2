@@ -1,0 +1,30 @@
+# Door-control lifecycle (design-specification.md section 9), as owned by
+# the Autonomous Decision Service's per-door control state. lock_state and
+# door_position are independent axes in the real model (section 9.1); this
+# view shows the lifecycle the Decision Service itself drives/reacts to,
+# which is why OPEN/CLOSED appear as states of the same machine rather
+# than a separate orthogonal diagram.
+
+direction: right
+
+locked: LOCKED {
+  style.fill: "#1a3a2a"
+}
+unlocked: UNLOCKED
+open: OPEN
+closed_unlocked: CLOSED (unlocked)
+unverified: UNVERIFIED {
+  style.fill: "#3a1a1a"
+  tooltip: "Commanded state unconfirmed (REQ-RES-002). Not a peer physical state — a confidence qualifier."
+}
+
+locked -> unlocked: "ALLOW decision -> UNLOCK confirmed"
+unlocked -> open: "DoorStateSensor observes OPEN (disarms no-open timeout)"
+unlocked -> locked: "10 model s elapse, no OPEN observed\n-> DOOR_NOT_OPENED + LOCK (RELOCK_TIMEOUT)"
+open -> closed_unlocked: "DoorStateSensor observes CLOSED"
+closed_unlocked -> locked: "LOCK confirmed (RELOCK_AFTER_PASSAGE)"
+
+locked -> unverified: "UNLOCK sent, BuildSim confirmation fails"
+unlocked -> unverified: "LOCK sent (timeout or passage), BuildSim confirmation fails"
+unverified -> locked: "later confirmed LOCKED"
+unverified -> unlocked: "later confirmed UNLOCKED"

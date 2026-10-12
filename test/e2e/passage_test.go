@@ -23,10 +23,8 @@ import (
 )
 
 const (
-	fromRoom   = "level0/1540"
-	toRoom     = "level0/A109"
-	personID   = "sim-person-1"
-	personName = "Occupant"
+	fromRoom = "level0/1540"
+	toRoom   = "level0/A109"
 )
 
 // TestSuccessfulPassage exercises REQ-FUNC-004, REQ-SIM-005, and
@@ -74,11 +72,9 @@ func TestSuccessfulPassage(t *testing.T) {
 	actuatorURL := "http://" + actuatorLn.Addr().String()
 
 	crossing := simulator.CrossingConfig{
-		DoorID:     doorID,
-		FromRoom:   fromRoom,
-		ToRoom:     toRoom,
-		PersonID:   personID,
-		PersonName: personName,
+		DoorID:   doorID,
+		FromRoom: fromRoom,
+		ToRoom:   toRoom,
 	}
 	initialOccupancy := map[string]int{fromRoom: 1, toRoom: 0}
 

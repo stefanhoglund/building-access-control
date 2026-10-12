@@ -1,0 +1,95 @@
+{
+  "_comment": "Named, seeded scenario definitions (design-specification.md section 3.5 Scenario). Data-driven on purpose: adding or adjusting a scenario should not require a Go code change. reader_id/door_id/direction are fixed because this slice simulates exactly one controlled door (REQ-TOPO-004); kind selects which of the three small execution strategies internal/simulator/scenarios.go uses.",
+  "scenarios": {
+    "normal-day": {
+      "description": "Several authorized users generate normal accesses spread over model time (REQ-SIM-001/002).",
+      "model_start": "2026-10-08T06:00:00Z",
+      "reader_id": "reader-1",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "kind": "population_sample",
+      "sample_size": 5,
+      "spacing_seconds": 900,
+      "jitter_seconds": 180
+    },
+    "authorized-passage": {
+      "description": "One authorized user, full successful-passage sequence (REQ-FUNC-004, REQ-SIM-005/006).",
+      "model_start": "2026-10-08T10:00:00Z",
+      "reader_id": "reader-1",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "kind": "fixed",
+      "steps": [
+        { "person_id": "alice", "offset_seconds": 0 }
+      ]
+    },
+    "unauthorized-access": {
+      "description": "A user/card without permission on this door attempts entry (REQ-AUTH, REQ-SIM-004).",
+      "model_start": "2026-10-08T10:00:00Z",
+      "reader_id": "reader-1",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "kind": "fixed",
+      "steps": [
+        { "person_id": "erin", "offset_seconds": 0 }
+      ]
+    },
+    "after-hours-access": {
+      "description": "A normally-authorized user accesses at an unusual model time; authorization stays ALLOW, anomaly detection should classify it ANOMALOUS.",
+      "model_start": "2026-10-08T03:00:00Z",
+      "reader_id": "reader-1",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "kind": "fixed",
+      "steps": [
+        { "person_id": "alice", "offset_seconds": 0 }
+      ]
+    },
+    "rapid-repeat-access": {
+      "description": "The same person presents repeatedly over a short model-time interval, for anomaly/data-quality evaluation.",
+      "model_start": "2026-10-08T10:00:00Z",
+      "reader_id": "reader-1",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "kind": "fixed",
+      "steps": [
+        { "person_id": "alice", "offset_seconds": 0 },
+        { "person_id": "alice", "offset_seconds": 1 },
+        { "person_id": "alice", "offset_seconds": 2 }
+      ]
+    },
+    "burst-access": {
+      "description": "Configurable number/rate of presentations by one person, for latency/stress evaluation. count/interval_ms may be overridden per run.",
+      "model_start": "2026-10-08T10:00:00Z",
+      "reader_id": "reader-1",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "kind": "burst",
+      "person_id": "alice",
+      "default_count": 50,
+      "default_interval_ms": 20
+    },
+    "decision-service-failure": {
+      "description": "A single authorized presentation, meant to be issued while the Decision Service is killed/restarted around this call (see scripts/run-local.sh demo-decision-failure and docs/scenarios.md).",
+      "model_start": "2026-10-08T10:00:00Z",
+      "reader_id": "reader-1",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "kind": "fixed",
+      "steps": [
+        { "person_id": "alice", "offset_seconds": 0 }
+      ]
+    },
+    "actuator-or-buildsim-failure": {
+      "description": "A single authorized presentation, meant to be issued while the Door Actuator or BuildSim is stopped around this call (see scripts/run-local.sh demo-actuator-failure and docs/scenarios.md).",
+      "model_start": "2026-10-08T10:00:00Z",
+      "reader_id": "reader-1",
+      "door_id": "door-1",
+      "direction": "PUBLIC_TO_EMPLOYEE",
+      "kind": "fixed",
+      "steps": [
+        { "person_id": "alice", "offset_seconds": 0 }
+      ]
+    }
+  }
+}

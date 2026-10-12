@@ -1,0 +1,42 @@
+# C4 Dynamic diagram: one key scenario, successful passage, numbered
+# runtime interactions among the containers (architecture.md section 6,
+# design-specification.md section 9.2). Matches the real sequence
+# produced in evidence/manual-allow-passage/evidence.jsonl.
+
+shape: sequence_diagram
+
+simulator: Simulator
+reader: Card Reader
+eventdata: Event & Data Service
+decision: Decision Service
+actuator: Door Actuator
+buildsim: BuildSim
+doorsensor: DoorStateSensor
+occsensor: OccupancySensor
+
+reader -> simulator: "1: GET /pending-presentations (poll)"
+simulator -> reader: "2: card-allow presentation"
+reader -> eventdata: "3: POST /observations"
+eventdata -> decision: "4: POST /decide"
+decision -> eventdata: "5: POST /decisions (ALLOW)"
+decision -> actuator: "6: POST /commands (UNLOCK)"
+actuator -> buildsim: "7: PUT /api/doors (lock_state=unlocked)"
+actuator -> eventdata: "8: POST /outcomes (CONFIRMED)"
+
+simulator -> buildsim: "9: PUT door_position=OPEN"
+doorsensor -> buildsim: "10: GET door state (poll)"
+doorsensor -> eventdata: "11: POST /door-state-observations (OPEN)"
+eventdata -> decision: "12: forward (disarms no-open timeout)"
+
+simulator -> simulator: "13: update occupancy truth (source -1, destination +1)"
+simulator -> buildsim: "14: PUT /api/occupancy (mirror)"
+occsensor -> simulator: "15: GET /occupancy (poll)"
+occsensor -> eventdata: "16: POST /occupancy-observations"
+
+simulator -> buildsim: "17: PUT door_position=CLOSED"
+doorsensor -> buildsim: "18: GET door state (poll)"
+doorsensor -> eventdata: "19: POST /door-state-observations (CLOSED)"
+eventdata -> decision: "20: forward (door was opened -> relock)"
+decision -> actuator: "21: POST /commands (LOCK, RELOCK_AFTER_PASSAGE)"
+actuator -> buildsim: "22: PUT /api/doors (lock_state=locked)"
+actuator -> eventdata: "23: POST /outcomes (CONFIRMED)"

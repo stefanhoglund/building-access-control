@@ -53,3 +53,15 @@ func (c *Clock) Advance(d time.Duration) time.Time {
 	c.now = c.now.Add(d)
 	return c.now
 }
+
+// Set positions the model clock at t. Like Advance, this is a
+// test/scenario-control operation: a named Scenario defines the initial
+// model time it runs from (design-specification.md section 3.5), so
+// starting one must be able to (re)position the clock there deterministically
+// rather than only moving it forward from wherever it already was.
+func (c *Clock) Set(t time.Time) time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = t
+	return c.now
+}

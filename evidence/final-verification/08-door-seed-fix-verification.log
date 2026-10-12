@@ -1,0 +1,27 @@
+=== full stack restart (repro attempt) ===
+ Container applied-ai-edge-computing-door-seed-1  Restarting
+ Container applied-ai-edge-computing-actuator-1  Restarting
+ Container applied-ai-edge-computing-simulator-1  Restarting
+ Container applied-ai-edge-computing-cardreader-1  Restarting
+ Container applied-ai-edge-computing-occupancysensor-1  Restarting
+ Container applied-ai-edge-computing-doorstatesensor-1  Restarting
+ Container applied-ai-edge-computing-buildsim-1  Restarting
+ Container applied-ai-edge-computing-decision-1  Restarting
+ Container applied-ai-edge-computing-eventdata-1  Restarting
+ Container applied-ai-edge-computing-dashboard-1  Restarting
+ Container applied-ai-edge-computing-door-seed-1  Started
+ Container applied-ai-edge-computing-eventdata-1  Started
+ Container applied-ai-edge-computing-buildsim-1  Started
+ Container applied-ai-edge-computing-simulator-1  Started
+ Container applied-ai-edge-computing-cardreader-1  Started
+ Container applied-ai-edge-computing-dashboard-1  Started
+ Container applied-ai-edge-computing-occupancysensor-1  Started
+ Container applied-ai-edge-computing-actuator-1  Started
+ Container applied-ai-edge-computing-doorstatesensor-1  Started
+ Container applied-ai-edge-computing-decision-1  Started
+
+=== door-seed logs after restart ===
+door-seed-1  | {"status":"updated","version":1}curl: (6) Could not resolve host: buildsim
+
+=== door-1 state after full restart ===
+[{"id":"door-1","name":"PUBLIC to EMPLOYEE door","kind":"door","level":"level0","room":"A109","position":[278.72,261.33],"state":"closed","lock_state":"locked","blocked":true,"timestamp":"2026-10-10T05:32:52.013017063Z"}]

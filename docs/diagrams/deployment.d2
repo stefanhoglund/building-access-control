@@ -1,0 +1,89 @@
+# Deployment diagram (architecture.md section 11, docs/deployment.md).
+# Shows the Docker Compose topology (compose.yaml) — the default
+# deployment mechanism (CLAUDE.md section 3). Everything in this course
+# runs on one laptop (no edge/cloud split in practice), so this view is
+# about container composition, isolation, and communication, not
+# physical distribution. The equivalent native-process topology
+# (scripts/run-local.sh) places the same eight processes directly on the
+# host instead of in containers, with identical addressing (loopback
+# instead of Compose's internal DNS) — see docs/deployment.md section 2.
+
+direction: down
+
+host: Student Laptop (Docker host) {
+  style.stroke-dash: 4
+  style.fill: transparent
+
+  compose: "compose.yaml (Docker Compose network)" {
+    style.stroke-dash: 4
+
+    simulator_c: "simulator\n:8081" { shape: rectangle }
+    eventdata_c: "eventdata\n:8082" { shape: rectangle }
+    decision_c: "decision\n:8083" { shape: rectangle }
+    actuator_c: "actuator\n:8084" { shape: rectangle }
+    dashboard_c: "dashboard\n:8085" { shape: rectangle }
+    cardreader_c: "cardreader\n(no listener, polls out)" { shape: rectangle }
+    occsensor_c: "occupancysensor\n(no listener, polls out)" { shape: rectangle }
+    doorsensor_c: "doorstatesensor\n(no listener, polls out)" { shape: rectangle }
+    doorseed_c: "door-seed\n(one-shot init, exits)" {
+      shape: rectangle
+      style.stroke-dash: 4
+      tooltip: "PUT /api/doors door-1 LOCKED/CLOSED, then exits. Re-runnable/idempotent (BuildSim has no persistence)."
+    }
+    buildsim_c: "buildsim\n:9090 (course Dockerfile, reused unmodified)" { shape: rectangle }
+
+    doorseed_c -> buildsim_c: "waits for healthy, then PUT (one-shot)"
+    simulator_c -> buildsim_c: "REST (after door-seed completes)"
+    actuator_c -> buildsim_c: "REST (after door-seed completes)"
+    doorsensor_c -> buildsim_c: "REST GET (after door-seed completes)"
+  }
+
+  evidence_vol: "./evidence (bind mount)" {
+    shape: cylinder
+    tooltip: "evidence/scenarios/runs.jsonl + existing experiment evidence/ directories. Survives any container or full `docker compose restart` — verified directly."
+  }
+  data_vol: "./data (bind mount)" {
+    shape: cylinder
+    tooltip: "data/evidence.jsonl, the Historical Evidence Store (ADR-005: eventdata sole writer). Survives any container or full `docker compose restart` — verified directly."
+  }
+
+  compose.simulator_c -> evidence_vol: "scenario-run log"
+  compose.eventdata_c -> data_vol: "sole writer (ADR-005)"
+  compose.dashboard_c -> data_vol: "read-only, re-read every request"
+}
+
+operator: Security Operator {
+  shape: person
+}
+operator -> host.compose.dashboard_c: "http://localhost:8085/ (published)"
+operator -> host.compose.buildsim_c: "http://localhost:9090/ (published)"
+operator -> host.compose.simulator_c: "http://localhost:8081/scenario/run (published)"
+
+host.compose.cardreader_c -> host.compose.simulator_c: "poll"
+host.compose.occsensor_c -> host.compose.simulator_c: "poll"
+host.compose.cardreader_c -> host.compose.eventdata_c: "POST"
+host.compose.eventdata_c -> host.compose.decision_c: "POST"
+host.compose.decision_c -> host.compose.actuator_c: "POST"
+host.compose.decision_c -> host.compose.eventdata_c: "POST (evidence)"
+host.compose.actuator_c -> host.compose.eventdata_c: "POST (evidence)"
+host.compose.occsensor_c -> host.compose.eventdata_c: "POST"
+host.compose.doorsensor_c -> host.compose.eventdata_c: "POST"
+host.compose.decision_c -> host.compose.simulator_c: "GET /modeltime (relock ticker)"
+host.compose.doorsensor_c -> host.compose.simulator_c: "GET /modeltime (model time only)"
+
+# Only 9090 (BuildSim), 8081 (Simulator scenario control), and 8085
+# (Dashboard) are published to the host, each loopback-only
+# (127.0.0.1:<port>:<port>) — "expose only needed host ports"
+# (docs/deployment.md section 2). Every other service is reachable only
+# by its Compose-internal DNS name (buildsim, simulator, eventdata,
+# decision, actuator, cardreader, occupancysensor, doorstatesensor,
+# dashboard), never 127.0.0.1 — that would mean the container itself.
+#
+# Each service is one container built from the same multi-stage
+# ./Dockerfile with a different `command:` (docs/deployment.md section
+# 1) — independently restartable, same as the native
+# scripts/run-local.sh topology this diagram's previous revision showed.
+# A fault in one (demonstrated for the Decision Service in
+# evidence/decision-restart-fault/, reproduced against this Compose
+# topology in docs/deployment.md's Phase 3 verification) does not
+# require restarting any other.

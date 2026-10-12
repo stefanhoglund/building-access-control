@@ -30,14 +30,19 @@ const (
 // Authorization reasons reachable by this slice's configuration
 // (design-specification.md section 5.5).
 const (
+	ReasonUserDeny     = "USER_DENY"
+	ReasonUserAllow    = "USER_ALLOW"
+	ReasonRoleDeny     = "ROLE_DENY"
 	ReasonRoleAllow    = "ROLE_ALLOW"
 	ReasonNoPermission = "NO_PERMISSION"
 	ReasonCardUnknown  = "CARD_UNKNOWN"
 	ReasonCardDisabled = "CARD_DISABLED"
 )
 
-// AnomalyNotEvaluated is the only anomaly_result value used until anomaly
-// detection is implemented (design-specification.md section 7.4).
+// AnomalyNotEvaluated is the degraded-state value (design-specification.md
+// section 7.4: the anomaly subsystem is unavailable, not that it returned
+// a normal result). See the AnomalyNormal/AnomalyAnomalous constants below
+// for the classifications the scorer actually produces.
 const AnomalyNotEvaluated = "NOT_EVALUATED"
 
 // Final decision actions (design-specification.md section 9.7). Alerts are
@@ -51,19 +56,36 @@ const (
 // (REQ-DEC-007). It is a placeholder constant until the policy evolves.
 const PolicyVersion = "v0"
 
+// Anomaly classifications (design-specification.md section 6).
+// AnomalyNotEvaluated remains a possible value for the degraded-state
+// case in section 7.4 (anomaly subsystem unavailable); the deterministic
+// scorer implemented in internal/decision/anomaly.go cannot itself fail,
+// so it never produces this value today.
+const (
+	AnomalyNormal    = "NORMAL"
+	AnomalyAnomalous = "ANOMALOUS"
+)
+
 // AccessDecision is produced by the Autonomous Decision Service. See
-// docs/data-contracts.md section 2.
+// docs/data-contracts.md section 2. FinalAction is determined solely by
+// AuthorizationResult (design-specification.md section 11.2: "A DENY
+// authorization cannot result in an ALLOW access decision") — Alert is a
+// separate field precisely so anomaly information can never be folded
+// into, or mistaken for, the authorization outcome itself (section 9.7).
 type AccessDecision struct {
-	DecisionID          string `json:"decision_id"`
-	EventID             string `json:"event_id"`
-	DoorID              string `json:"door_id"`
-	Direction           string `json:"direction"`
-	AuthorizationResult string `json:"authorization_result"`
-	AuthorizationReason string `json:"authorization_reason"`
-	AnomalyResult       string `json:"anomaly_result"`
-	FinalAction         string `json:"final_action"`
-	ModelTime           string `json:"model_time"`
-	PolicyVersion       string `json:"policy_version"`
+	DecisionID          string  `json:"decision_id"`
+	EventID             string  `json:"event_id"`
+	DoorID              string  `json:"door_id"`
+	Direction           string  `json:"direction"`
+	AuthorizationResult string  `json:"authorization_result"`
+	AuthorizationReason string  `json:"authorization_reason"`
+	AnomalyResult       string  `json:"anomaly_result"`
+	AnomalyReason       string  `json:"anomaly_reason"`
+	AnomalyScore        float64 `json:"anomaly_score"`
+	FinalAction         string  `json:"final_action"`
+	Alert               bool    `json:"alert"`
+	ModelTime           string  `json:"model_time"`
+	PolicyVersion       string  `json:"policy_version"`
 }
 
 // Actuator command actions and reasons (design-specification.md section 9.1/9.7).
@@ -196,4 +218,28 @@ type ScenarioPresentRequest struct {
 	CardID    string `json:"card_id"`
 	DoorID    string `json:"door_id"`
 	Direction string `json:"direction"`
+}
+
+// ScenarioRunRequest invokes one of the Simulator's named, seeded
+// scenarios (design-specification.md section 3.5). Count/IntervalMillis
+// only apply to the "burst" scenario kind and override its configured
+// defaults when nonzero; they are ignored for every other kind.
+type ScenarioRunRequest struct {
+	Scenario       string `json:"scenario"`
+	Seed           int64  `json:"seed"`
+	Count          int    `json:"count,omitempty"`
+	IntervalMillis int    `json:"interval_ms,omitempty"`
+}
+
+// ScenarioRunResult is returned once every presentation a scenario run
+// specifies has been enqueued. It is also what gets appended to
+// evidence/scenarios/runs.jsonl (reproducibility metadata, not part of the
+// Historical Evidence Store proper — see internal/simulator/scenarios.go).
+type ScenarioRunResult struct {
+	RunID         string   `json:"run_id"`
+	Scenario      string   `json:"scenario"`
+	Seed          int64    `json:"seed"`
+	ModelStart    string   `json:"model_start"`
+	StepsExecuted int      `json:"steps_executed"`
+	CardIDs       []string `json:"card_ids"`
 }

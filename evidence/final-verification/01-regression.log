@@ -1,0 +1,81 @@
+=== D7065E Final Verification Run ===
+Timestamp (UTC): 2026-10-10T05:29:37Z
+Git HEAD: 59dff71d321c19510331ddfd8b10780346dc77b8 (Complete manual successful-passage CPS validation)
+Working tree: 51 changed/untracked paths (uncommitted; see docs/final-report-gap-analysis.md)
+
+--- gofmt -l . ---
+(clean)
+
+--- go vet ./... ---
+(clean)
+
+--- go test ./... ---
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/actuator	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/cardreader	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/dashboard	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/decision	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/doorstatesensor	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/eventdata	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/latencybench	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/occupancysensor	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/simulator	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/stressbench	[no test files]
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/actuator	(cached)
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/buildsim	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/cardreader	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/config	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/contracts	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/dashboard	[no test files]
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/decision	(cached)
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/doorstatesensor	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/eventdata	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/evidence	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/httpx	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/idgen	[no test files]
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/modeltime	(cached)
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/occupancysensor	[no test files]
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/simulator	(cached)
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/test/e2e	1.585s
+
+--- go test ./... -race ---
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/actuator	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/cardreader	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/dashboard	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/decision	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/doorstatesensor	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/eventdata	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/latencybench	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/occupancysensor	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/simulator	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/cmd/stressbench	[no test files]
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/actuator	(cached)
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/buildsim	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/cardreader	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/config	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/contracts	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/dashboard	[no test files]
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/decision	(cached)
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/doorstatesensor	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/eventdata	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/evidence	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/httpx	[no test files]
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/idgen	[no test files]
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/modeltime	(cached)
+?   	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/occupancysensor	[no test files]
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/internal/simulator	(cached)
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/test/e2e	2.638s
+
+--- go vet -tags=integration ./... ---
+(clean)
+
+--- go test -tags=integration ./test/integration/... ---
+=== RUN   TestRealBuildSimALLOWAndRelock
+    realbuildsim_test.go:235: real BuildSim end-to-end chain verified: event_id=710002a6-79bb-6f6c-c449-f516774c0ae5 decision_id=fed322d2-ef2e-1a11-1964-183c2422bfb9 command_id=e1c31a4e-5e62-18aa-2348-24ddcf8b30ce
+--- PASS: TestRealBuildSimALLOWAndRelock (0.20s)
+PASS
+ok  	github.com/stefanhoglund-cdot/applied-ai-edge-computing/test/integration	(cached)
+
+--- jq validation ---
+config/system-config.json: valid JSON
+config/population.json: valid JSON
+config/scenarios.json: valid JSON

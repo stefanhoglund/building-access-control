@@ -119,7 +119,7 @@ docs/
     ├── 001-authorization-precedence.md
     ├── 002-single-autonomous-decision-service.md
     ├── 003-model-time.md
-    ├── 004-system-configuration.md
+    ├── 004-versioned-system-configuration.md
     ├── 005-control-path-through-data-service.md
     └── 006-occupancy-state-ownership.md
 ```
@@ -218,25 +218,73 @@ Before implementing a non-trivial change, identify:
 
 See `CLAUDE.md` for coding-agent guidance.
 
-## Current Development Status
+## Running the System
 
-Architecture baseline **v0.2** has been reconciled against ADR-001 through ADR-006 and frozen for implementation.
+### Native (no Docker)
 
-The immediate implementation target is the smallest end-to-end vertical slice:
-
-```text
-one controlled door
-→ one card reader
-→ one user/card/role/permission
-→ Event & Data Service
-→ Autonomous Decision Service
-→ Door Actuator
-→ BuildSim state change
-→ simulator feedback
-→ retained evidence
+```bash
+make build      # builds every process binary into bin/
+make run        # starts BuildSim, seeds door-1 LOCKED/CLOSED, starts all 8 processes + dashboard
+make status     # show which processes are running
+make stop       # stop everything this started
 ```
 
-The first slice should demonstrate both `ALLOW` and `DENY` behavior before anomaly detection or broader fault scenarios are added.
+- Dashboard: <http://localhost:8085/>
+- BuildSim: <http://localhost:9090/>
+
+Drive a named scenario (see `docs/scenarios.md` for what each one does):
+
+```bash
+make demo-allow             # authorized-passage
+make demo-deny              # unauthorized-access
+make demo-after-hours       # after-hours-access (authorized but anomalous)
+make demo-rapid-repeat      # rapid-repeat-access (anomalous)
+make demo-normal-day        # normal-day (seeded population sample)
+make demo-decision-failure  # kill/restart the Decision Service mid-scenario
+make demo-actuator-failure  # stop/restart the Door Actuator mid-scenario
+```
+
+`scripts/run-local.sh` lists every available subcommand directly.
+
+### Docker Compose
+
+```bash
+make docker-up    # docker compose up --build -d: BuildSim + all 8 processes + dashboard
+make docker-logs  # docker compose logs -f
+make docker-down  # docker compose down
+```
+
+- Dashboard: <http://localhost:8085/>
+- BuildSim: <http://localhost:9090/>
+- Simulator (scenario control): <http://localhost:8081/>
+
+The same named scenarios, against the containerized stack:
+
+```bash
+make docker-demo-allow
+make docker-demo-deny
+make docker-demo-after-hours
+make docker-demo-rapid-repeat
+make docker-demo-normal-day
+make docker-demo-decision-failure
+```
+
+Evidence persists on the host under `./data/` and `./evidence/` (bind-mounted
+into every container that needs it), so it survives any single container's
+restart or a full `docker compose restart`. See `docs/deployment.md` for the
+complete container/service mapping, networking, and the reasoning behind
+choosing Compose.
+
+## Current Development Status
+
+The vertical slice described by architecture baseline v0.2 (ADR-001 through
+ADR-006) is implemented end-to-end: one controlled door, a configured
+population of simulated people, authorization, anomaly detection, decision
+policy, runtime assurance, actuation, sensing, evidence retention, a
+dashboard, named/seeded scenarios (`docs/scenarios.md`), and a Docker Compose
+deployment (`docs/deployment.md`) alongside the native workflow above. See
+`docs/test-plan.md` for per-requirement verification status and
+`docs/final-report-gap-analysis.md` for what remains out of scope.
 
 ## Testing and Evaluation
 

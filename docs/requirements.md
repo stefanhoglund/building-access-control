@@ -261,8 +261,23 @@ Final verification: pending real BuildSim integration
 REQ-PERF-001
 Under nominal load, 95% of access decisions shall be produced within a defined latency threshold.
 
+Access decision latency is defined as the wall-clock time from the
+Event/Data Service receiving an access-attempt observation to the
+Event/Data Service receiving the resulting AccessDecision (wall-clock,
+not model time; see docs/evaluation-plan.md).
+
 Acceptance threshold:
-TBD after initial baseline measurement.
+p95 <= 10 ms, p100 <= 50 ms.
+
+Baseline measurement (200 samples, nominal load, in-process over
+loopback, 2026-10-09): p50 = 0.30 ms, p95 = 0.60 ms, max = 0.93 ms — see
+evidence/latency/results.json. The threshold is set well above this
+measured baseline (headroom for scheduling jitter, GC pauses, and modest
+load growth) but far below the ~100 ms point at which an interactive,
+door-side response is perceived as non-instantaneous, so the requirement
+remains a real engineering constraint rather than an arbitrarily loose
+one chosen merely to pass. It was not chosen before this measurement
+existed.
 
 REQ-TEST-001
 The system shall support reproducible end-to-end scenarios using a configured scenario identifier and random seed.

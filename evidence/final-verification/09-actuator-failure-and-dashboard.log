@@ -1,0 +1,22 @@
+=== stop actuator ===
+=== present during actuator outage ===
+{"run_id":"22f563e6-c721-aff3-0f96-a617c82b72e6","scenario":"actuator-or-buildsim-failure","seed":1,"model_start":"2026-10-08T10:00:00Z","steps_executed":1,"card_ids":["card-alice"]}
+
+door-1 (expect still locked, no false confirm): locked closed
+=== last command/outcome records ===
+{"record_type":"door_state_observation","recorded_at":"2026-10-10T05:33:28.772879343Z","payload":{"event_id":"69cb2dd6-8551-14f6-558c-52289457472a","schema_version":"1","source_id":"doorstatesensor-1","model_time":"2026-10-10T05:33:27Z","source_time":"2026-10-10T05:33:28.771380446Z","receive_time":"2026-10-10T05:33:28.772865331Z","door_id":"door-1","door_position":"CLOSED","quality":"OK"}}
+{"record_type":"observation","recorded_at":"2026-10-10T05:33:45.515719677Z","payload":{"event_id":"0a8e9793-150a-0c48-9ef3-15e9f78fb7d9","schema_version":"1","source_id":"reader-1","model_time":"2026-10-08T10:00:00Z","source_time":"2026-10-10T05:33:45.51392272Z","receive_time":"2026-10-10T05:33:45.515709881Z","card_id":"card-alice","door_id":"door-1","direction":"PUBLIC_TO_EMPLOYEE"}}
+{"record_type":"decision","recorded_at":"2026-10-10T05:33:45.517806072Z","payload":{"decision_id":"2bb263ee-649a-f091-b465-d5f097badebb","event_id":"0a8e9793-150a-0c48-9ef3-15e9f78fb7d9","door_id":"door-1","direction":"PUBLIC_TO_EMPLOYEE","authorization_result":"ALLOW","authorization_reason":"ROLE_ALLOW","anomaly_result":"NORMAL","anomaly_reason":"NORMAL","anomaly_score":0,"final_action":"ALLOW","alert":false,"model_time":"2026-10-08T10:00:00Z","policy_version":"v0"}}
+{"record_type":"command","recorded_at":"2026-10-10T05:33:45.51833655Z","payload":{"command_id":"cdabfcb5-c267-5545-b135-6cb5920bad9a","decision_id":"2bb263ee-649a-f091-b465-d5f097badebb","door_id":"door-1","action":"UNLOCK","reason":"ALLOW_UNLOCK","model_time":"2026-10-08T10:00:00Z"}}
+
+=== restart actuator ===
+=== fresh access after actuator restored ===
+{"run_id":"0e6f99bd-e91f-72af-eef5-6cad56cb0dfa","scenario":"authorized-passage","seed":7,"model_start":"2026-10-08T10:00:00Z","steps_executed":1,"card_ids":["card-alice"]}
+
+door-1 after recovery: locked closed
+
+=== dashboard check ===
+HTTP 200
+  11 ALLOW
+   2 ANOMALOUS
+   1 lock_state
