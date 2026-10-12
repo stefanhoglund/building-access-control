@@ -218,6 +218,43 @@ Before implementing a non-trivial change, identify:
 
 See `CLAUDE.md` for coding-agent guidance.
 
+## Prerequisites and Fresh Installation
+
+This project supports two execution modes:
+
+1. **Docker Compose** — recommended for a fresh machine because it builds and runs the complete application stack reproducibly.
+2. **Native Go binaries** — useful for development, debugging, testing, and running individual services directly.
+
+The final report can also be rebuilt locally from the LaTeX source in `report/`.
+
+### Required tools
+
+At minimum, install:
+
+- Git
+- Docker with Docker Compose
+- Make
+
+For native development and testing, also install:
+
+- Go
+
+For rebuilding the final report, also install:
+
+- A LaTeX distribution providing `pdflatex`
+
+Optional developer tools may be needed for regenerating architecture diagrams, but they are not required to run the application or build the existing report PDF.
+
+### macOS
+
+Using Homebrew:
+
+```bash
+brew install git make go
+brew install --cask docker
+brew install --cask mactex-no-gui
+
+
 ## Running the System
 
 ### Native (no Docker)

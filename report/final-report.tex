@@ -84,7 +84,7 @@
 \providecommand{\subtitle}[1]{\apptocmd{\@title}{\par {\large #1 \par}}{}{}}
 \makeatother
 \subtitle{D7065E, Architecture Document (Final Report)}
-\author{Stefan Hoglund}
+\author{Stefan Höglund (stehog-6@student.ltu.se)}
 \date{October 2026}
 
 \begin{document}
@@ -147,19 +147,22 @@ falsifiable, not just asserted in prose.
 \end{longtable}
 
 \textbf{Scope and evolution.} The system settled on a materially smaller
-physical footprint than a typical multi-room ventilation use case would
-require (one controlled door, not many rooms with continuous physical
-quantities), and used that headroom instead on distributed-systems depth:
-fail-closed behavior under a killed Decision Service, unverified-vs-
-confirmed actuation under a killed BuildSim/Actuator, a genuine
-stress/breaking-point experiment, and a full Docker Compose deployment
-alongside the native one. The autonomous component stayed deliberately
-rule-based (authorization precedence plus a two-factor anomaly scorer)
-rather than adopting a learned model: with one controlled door there is
-no data-quantity or feature-diversity justification for machine
-learning, and a deterministic baseline is what makes the decision-policy
-invariants (Section~\ref{sec:autonomous}) checkable by a unit test rather
-than only by inspection. This is consistent with the course's own
+physical footprint than a typical multi-room environmental-control use
+case would require -- one controlled door rather than many rooms with
+continuous physical quantities -- and used that headroom instead on
+distributed-systems depth: fail-closed behavior under a killed Decision
+Service, explicit \texttt{UNVERIFIED} outcomes when BuildSim cannot
+confirm an actuation, an identified missing-outcome gap when the Actuator
+itself cannot be reached, a genuine stress/breaking-point experiment,
+and a full Docker Compose deployment alongside the native one.
+
+The autonomous component stayed deliberately rule-based (authorization
+precedence plus a two-factor anomaly scorer) rather than adopting a
+learned model: with one controlled door there is no data quantity or
+feature diversity sufficient to justify training one. The deterministic
+baseline also makes anomaly behavior transparent and directly testable,
+while the separate decision-policy boundary guarantees that anomaly
+cannot itself grant access. This is consistent with the course's own
 framing that sophistication is not the grading criterion (grading
 criteria, ``Expectations and Scope'').
 
@@ -192,7 +195,7 @@ policy, never earlier (Section~\ref{sec:autonomous}).
 
 The cyber-physical feedback loop this project closes is: a simulated
 person's intent (Occupant \& Movement Simulator) becomes a sensor
-observation (Card Reader) \(\rightarrow\) a validated, stored event
+observation (Card Reader) \(\rightarrow\) a timestamped, stored event
 (Event/Data Service) \(\rightarrow\) an autonomous decision (Decision
 Service) \(\rightarrow\) a physical actuator command (Door Actuator)
 \(\rightarrow\) an observable BuildSim state change (lock state, door
@@ -215,28 +218,100 @@ evidence, status, and a one-sentence rationale for all 54 IDs, is in that
 document.
 
 \begin{longtable}[]{@{}
-  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.14}}
-  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.62}}
-  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.24}}@{}}
+  >{\raggedright\arraybackslash}p{0.15\linewidth}
+  >{\raggedright\arraybackslash}p{0.14\linewidth}
+  >{\raggedright\arraybackslash}p{0.10\linewidth}
+  >{\raggedright\arraybackslash}p{0.34\linewidth}
+  >{\raggedright\arraybackslash}p{0.21\linewidth}@{}}
 \toprule
-\textbf{ID} & \textbf{Requirement (concise)} & \textbf{Status} \\
+\textbf{ID} &
+\textbf{Type} &
+\textbf{Priority} &
+\textbf{Acceptance criterion} &
+\textbf{Verification} \\
 \midrule
 \endhead
-REQ-FUNC-001/002 & Deny/allow an access attempt per the authorization result & PASS \\
-REQ-FUNC-003/004 & Relock on no-open timeout / after a completed passage & PASS \\
-REQ-AUTH-001--008 & Card/user/role/permission model, deterministic precedence (ADR-001) & 5 PASS, 2 PARTIAL, 1 UNIMPLEMENTED \\
-REQ-TOPO-001--004 & Zones, controlled boundary, reader/actuator/door-state binding, level-qualified room IDs & 3 PASS, 1 PARTIAL \\
-REQ-SIM-001--006 & Configured population, named seeded scenarios, occupancy truth, CPS feedback & 4 PASS, 2 PARTIAL \\
-REQ-DEC-001--007 & Autonomous decision, authorization/anomaly separation, full traceability & 7 PASS \\
-REQ-DIST-001--007 & Independent restartable processes, documented interfaces, bounded timeouts, dedup & 5 PASS, 2 UNIMPLEMENTED \\
-REQ-DATA-001--006 & Data pipeline, restart survival, required fields, duplicate/late/malformed handling & 3 PASS, 1 PARTIAL, 2 UNIMPLEMENTED \\
-REQ-RES-001--005 & Fail-closed, unverified actuation, staleness, restart recovery & 3 PASS, 2 UNIMPLEMENTED \\
-REQ-VIS-001 & Dashboard visualization & PASS \\
-REQ-BS-001--003 & BuildSim authoritative role, independence of history, observable feedback & 3 PASS \\
-REQ-PERF-001 & p95 decision latency within threshold & PASS (measured, Section~\ref{sec:evaluation}) \\
-REQ-TEST-001/002 & Reproducible scenario ID + seed; full traceability & 2 PASS \\
+
+REQ-FUNC-001 &
+Functional &
+Must &
+A DENY decision produces no UNLOCK command and the controlled door remains locked. &
+E2E DENY scenario \\
+
+REQ-FUNC-004 &
+Functional &
+Must &
+After an observed OPEN followed by CLOSED, the system issues a relock command. &
+Successful-passage E2E test \\
+
+REQ-AUTH-008 &
+Functional &
+Must &
+When no user or role permission matches, authorization resolves deterministically to DENY. &
+Authorization unit tests \\
+
+REQ-DEC-003 &
+Functional &
+Must &
+An anomaly classification shall never convert an otherwise unauthorized access attempt into ALLOW. &
+Policy-matrix unit test and anomalous-DENY scenario \\
+
+REQ-DIST-004 &
+Non-functional &
+Must &
+Outbound inter-process HTTP calls made through the shared client terminate within the configured 2 s timeout. &
+Decision-service failure experiment \\
+
+REQ-DATA-002 &
+Non-functional &
+Must &
+Historical evidence survives process and container restart without being reset. &
+Evidence-persistence restart test \\
+
+REQ-RES-001 &
+Non-functional &
+Must &
+Loss of the Decision Service shall not cause a locked door to unlock. &
+Decision-kill fault experiment \\
+
+REQ-RES-002 &
+Non-functional &
+Must &
+If BuildSim cannot confirm a commanded transition, the outcome is recorded as UNVERIFIED and never falsely as CONFIRMED. &
+BuildSim-unavailable actuator test \\
+
+REQ-VIS-001 &
+Functional &
+Should &
+Dashboard exposes current door state, latest access decision, anomaly status, occupancy, and recent evidence. &
+Manual dashboard verification \\
+
+REQ-PERF-001 &
+Under nominal load, 95\% of access decisions shall be produced within
+10 ms. Access-decision latency is defined as the wall-clock time from
+the Event/Data Service receiving an access-attempt observation to the
+Event/Data Service receiving the resulting \texttt{AccessDecision}.
+\textit{Acceptance:} p95 $\leq$ 10 ms. \\
+
+REQ-TEST-001 &
+Verification &
+Must &
+A named scenario can be replayed with a recorded scenario ID and seed. &
+Scenario reproducibility test \\
+
 \bottomrule
 \end{longtable}
+
+The table above is a representative cross-section rather than a second
+authoritative requirement register. The complete set of 54 internal
+requirements -- including type, priority, acceptance criterion,
+implementing component, verification method, evidence location, status,
+and rationale -- is maintained in
+\texttt{docs/traceability-matrix.md}. Keeping the full matrix there
+avoids duplicating 54 rows in the report while preserving the
+requirement $\rightarrow$ design $\rightarrow$ verification traceability
+required by the course.
+
 
 \textbf{How verification works.} Each requirement names the component
 that owns it, the automated test or manual experiment that exercises it,
@@ -247,15 +322,18 @@ separately. Of 54 internal requirements, \textbf{41 are PASS, 6 PARTIAL,
 7 UNIMPLEMENTED} -- the PARTIAL/UNIMPLEMENTED set is discussed honestly
 in Section~\ref{sec:risks}, not hidden here.
 
-Non-functional requirements are the \texttt{REQ-DIST}, \texttt{REQ-DATA},
-\texttt{REQ-RES}, and \texttt{REQ-PERF} groups (timeouts, restart
-behavior, data retention, latency); functional requirements are
-\texttt{REQ-FUNC}, \texttt{REQ-AUTH}, \texttt{REQ-TOPO}, \texttt{REQ-SIM},
-\texttt{REQ-DEC}, \texttt{REQ-VIS}, \texttt{REQ-BS}. \texttt{REQ-TEST-*}
-and the mandatory course checklist (reproduced as Part A of the
-traceability matrix) are kept explicitly distinct from both: they are
-evaluation-methodology and gate requirements, not system behavior
-requirements.
+For reporting purposes, the primarily non-functional requirements are the
+\texttt{REQ-DIST}, \texttt{REQ-DATA}, \texttt{REQ-RES}, and
+\texttt{REQ-PERF} groups, covering qualities such as process independence,
+timeouts, restart behavior, data retention and quality, resilience, and
+latency. The primarily functional and structural requirements are
+\texttt{REQ-FUNC}, \texttt{REQ-AUTH}, \texttt{REQ-TOPO},
+\texttt{REQ-SIM}, \texttt{REQ-DEC}, \texttt{REQ-VIS}, and
+\texttt{REQ-BS}, describing the behavior and integration the system must
+provide. \texttt{REQ-TEST-*} and the mandatory course pass/fail checklist
+(reproduced as Part A of the traceability matrix) are kept explicitly
+separate: they define verification methodology and submission gates rather
+than runtime system behavior.
 
 \section{Architecture}
 \label{sec:architecture}
@@ -284,18 +362,18 @@ deployable project processes and their communication paths, plus BuildSim.}
 Opening the system into its separately-running parts: the Occupant \&
 Movement Simulator (owns model time and occupancy/door-position truth);
 three independent sensor processes (Card Reader, OccupancySensor,
-DoorStateSensor); the Event/Data Service (validates and retains
-evidence, and sits on the control path -- Section~\ref{sec:interfaces});
-the Decision Service (authorization, anomaly, policy, runtime assurance);
-the Door Actuator (issues and verifies physical commands); and the
-Dashboard (reads the evidence file directly). Every arrow is a real REST
-call or a direct file read, documented precisely in
-\texttt{docs/data-contracts.md}. The system is split this way because
-each box is independently the unit of restart, failure, and deployment
-the course's mandatory pass/fail criterion \#1 requires -- not because
-eight is an aesthetically pleasing number of services. Section~4.4 below
-names the alternatives actually considered and rejected for each major
-boundary.
+DoorStateSensor); the Event/Data Service (accepts, timestamps, retains,
+and forwards observations, and sits on the control path --
+Section~\ref{sec:interfaces}); the Decision Service (authorization,
+anomaly, policy, runtime assurance); the Door Actuator (issues and
+verifies physical commands); and the Dashboard (reads the evidence file
+directly). Every arrow is a real REST call or a direct file read,
+documented precisely in \texttt{docs/data-contracts.md}. The system is
+split this way because each box is independently the unit of restart,
+failure, and deployment the course's mandatory pass/fail criterion \#1
+requires -- not because eight is an aesthetically pleasing number of
+services. Section~4.4 below names the alternatives actually considered
+and rejected for each major boundary.
 
 \subsection{Component diagram (C4 Level 3)}
 
@@ -333,8 +411,9 @@ folded directly into the Event/Data Service &
 units for zero required-by-the-course benefit -- the mandatory criterion
 asks for \emph{an} independently deployable autonomous component, not one
 per internal function. (b) would blur the Event/Data Service's own
-single responsibility (ADR-005) and make the authorization/anomaly
-separation a code-review convention instead of a process boundary. The
+single responsibility (ADR-005) and make the authorization/anomaly separation a code-review convention
+instead of the explicit module boundary currently enforced inside the
+Decision Service. The
 chosen option keeps the separation structurally enforced in code while
 avoiding unjustified network calls. \\
 Sensor observations route through the Event/Data Service before
@@ -344,13 +423,17 @@ reaching the Decision Service, not directly sensor-to-decision
 Service only receiving a copy for storage; (b) the chosen path, Event/Data
 Service as the sole gate &
 (a) creates two sources of truth for ``was this observation accepted'' and
-makes validation/dedup logic (even the parts not yet built, REQ-DATA-004/
-005) have to live in two places or be skipped. (b) gives the system one
-place malformed, duplicate, or late data is handled, and makes the
-Historical Evidence Store's ``sole writer'' invariant (ADR-005) trivial to
-state and check. The cost is that the Event/Data Service is now on the
-critical access-control path -- named explicitly as a trade-off in
-ADR-005 and revisited in Section~\ref{sec:risks}. \\
+would force validation or data-quality logic to live in two places or be
+skipped. The chosen path gives the system one authoritative location
+\emph{where} malformed, duplicate, late, or stale-data handling can be
+implemented without duplicating that logic across sensors and the Decision
+Service. That handling is not complete in the current prototype
+(REQ-DATA-004/005 and REQ-RES-003/005 remain incomplete), but the
+architectural enforcement point is explicit. The same choice also makes
+the Historical Evidence Store's ``sole writer'' invariant (ADR-005)
+straightforward to state and verify. The cost is that the Event/Data
+Service is now on the critical access-control path -- named explicitly as
+a trade-off in ADR-005 and revisited in Section~\ref{sec:risks}. \\
 REST over HTTP for every inter-process call, not a message broker &
 MQTT/a message broker (explicitly suggested by the course materials as a
 comparison point) &
@@ -376,16 +459,17 @@ A trained classifier (e.g., logistic regression or an LLM-based judge) on
 access-time/repeat-attempt features &
 With one controlled door and a handful of simulated people, there is no
 realistic quantity or diversity of training data to justify a learned
-model, and a rule-based baseline makes the core safety invariant (anomaly
-can never grant access, REQ-DEC-003) a one-line structural guarantee
-checkable by \texttt{go test}, not a property that would need to be
-re-verified after every retrain. The course's own grading philosophy
-states explicitly that more sophisticated AI does not by itself earn a
-higher grade. \\
+model. The deterministic baseline therefore makes anomaly behavior
+transparent, repeatable, and directly testable. Independently of how
+anomaly is scored, the decision-policy boundary ensures that neither this
+rule-based scorer nor a future learned replacement can grant access by
+itself: \texttt{final\_action} is derived only from authorization
+(REQ-DEC-003). The course's own grading philosophy also states explicitly
+that more sophisticated AI does not by itself earn a higher grade. \\
 Docker Compose, one image shared by all eight project services, plus
 BuildSim's own (unmodified) course-provided image &
 Kubernetes; one Dockerfile/image per service &
-Nine containers that mostly talk over plain REST on one host do not need
+Nine long-running containers that mostly talk over plain REST on one host do not need
 an orchestrator with its own control plane -- the course explicitly
 discourages this (\S3: ``do not introduce Kubernetes ... unless explicitly
 required by an experiment''). Building eight separate images for eight
@@ -428,11 +512,13 @@ scenario specifies has been enqueued, returns
 card\_ids\}} (Section~\ref{sec:simulation}).
 \end{itemize}
 
-\textbf{Every network call has a bounded timeout}
-(\texttt{internal/httpx}, \texttt{DefaultTimeout = 2s}, REQ-DIST-004) --
-no inter-process call can block indefinitely, which is what makes the
-fail-closed behavior under a killed Decision Service (Section~\ref{sec:evaluation})
-a bounded-time property rather than a hang.
+\textbf{Every outbound inter-process HTTP call made through the project's
+shared client has a bounded timeout}
+(\texttt{internal/httpx}, \texttt{DefaultTimeout = 2s}, REQ-DIST-004).
+This prevents project-controlled HTTP clients from waiting indefinitely
+for an unavailable peer and is what makes fail-closed behavior under a
+killed Decision Service (Section~\ref{sec:evaluation}) a bounded-time
+property rather than an unbounded hang.
 
 \textbf{Control-path design (ADR-005).} Observations are routed
 Sensor~\(\rightarrow\)~Event/Data~Service~\(\rightarrow\)~Decision~Service,
@@ -463,16 +549,17 @@ mirroring (\texttt{SetRoomOccupancy}), which also round-trips BuildSim's
 \texttt{aliens} field even though this project never populates it, purely
 so an unrelated field is never silently dropped on a PUT.
 
-\textbf{Model time vs. wall-clock time.} The Occupant \& Movement
+\textbf{Model time vs.\ wall-clock time.} The Occupant \& Movement
 Simulator is the sole owner of model time (ADR-003); every other process
 either queries it (\texttt{GET /modeltime}) or receives it stamped on an
 observation, never infers it from its own clock. Model time governs
-permission windows, scenario timing, and the anomaly scorer's time-of-day
-factor; wall-clock time governs network timeouts, process health, and
-every latency/recovery-time measurement in Section~\ref{sec:evaluation}.
-The two are never mixed implicitly -- every timer in the codebase states
-which clock it uses in its own comment (e.g., the relock-timeout ticker
-polls on a wall-clock cadence but compares against model time).
+scenario timing, the anomaly scorer's time-of-day factor, and logical
+relock timing; wall-clock time governs network timeouts, process health,
+and every latency/recovery-time measurement in
+Section~\ref{sec:evaluation}. The two are never mixed implicitly -- for
+example, the relock-timeout ticker wakes on a wall-clock cadence but
+compares against model time. Time-window authorization was designed to
+use model time but remains unimplemented (REQ-AUTH-005).
 
 \section{Simulation}
 \label{sec:simulation}
@@ -486,6 +573,38 @@ visitor, student) -- behavioral diversity, not population size, is the
 design goal, consistent with the course's own framing that a simple,
 well-justified system scores higher than a technically ambitious one
 that cannot be clearly explained.
+
+\textbf{Discrete physical model.} Unlike temperature, CO$_2$, or HVAC
+control, this access-control use case has no meaningful continuous
+environmental quantity that must be integrated over time. Its
+cyber-physical model is therefore discrete-event rather than
+differential-equation based.
+
+Let \(O_A(t)\) and \(O_B(t)\) denote the simulated occupant counts on the
+two sides of the controlled boundary. For one authorized crossing from
+room \(A\) to room \(B\),
+
+\[
+O_A(t+1) = O_A(t) - 1,
+\qquad
+O_B(t+1) = O_B(t) + 1,
+\]
+
+but only if the commanded physical state has been observed in BuildSim
+as \texttt{UNLOCKED}. Otherwise,
+
+\[
+O_A(t+1) = O_A(t),
+\qquad
+O_B(t+1) = O_B(t).
+\]
+
+The actuator therefore changes the physical condition under which the
+next simulated state transition is permitted. Door position and lock
+state are subsequently observed by independent sensor processes and fed
+back into the control path. This is the project's physical feedback
+model: actuator output constrains the next environment transition, and
+that transition becomes new sensor input.
 
 \textbf{Eight named, seeded, reproducible scenarios}
 (\texttt{config/scenarios.json}, \texttt{docs/scenarios.md}) are invoked
@@ -517,10 +636,10 @@ holds structurally, not by a separate check.
 layer is reproducible evaluation, not simulation realism: the full
 probabilistic \texttt{BehaviorProfile} the design specification describes
 (arrival/dwell-time distributions, transition probabilities) was
-deliberately not built. What \emph{is} built -- seeded selection, order,
-and timing of a small, diverse population -- is exactly enough to drive
-every required evaluation scenario (nominal, anomalous, stress,
-fault) reproducibly, and no more. This is reflected honestly in
+deliberately not built. What \emph{is} built -- seeded selection, order, and timing of a small,
+diverse population -- is exactly enough to drive the required nominal,
+anomalous, passage, and fault-oriented scenarios reproducibly, and no
+more. This is reflected honestly in
 \texttt{docs/traceability-matrix.md}: REQ-SIM-001/002 are PARTIAL, not
 PASS, for exactly this reason.
 
@@ -535,11 +654,14 @@ Simulator's own \texttt{/occupancy} endpoint and the
 regardless -- only the \emph{visual} mirror simplifies, consistent with
 ADR-006 stating the mirror is one-way and never read back.
 
-How the simulator supports repeatable evaluation is the subject of
-Section~\ref{sec:evaluation}: every nominal, anomalous, and stress
-evaluation result cited there was produced by one of these eight named
-scenarios, invoked with a recorded seed, and is reproducible by replaying
-the same \texttt{POST /scenario/run} call.
+The named scenarios provide reproducible inputs for the nominal,
+anomalous, passage, and fault-oriented evaluations in
+Section~\ref{sec:evaluation}: each can be replayed with the same scenario
+name and recorded seed. The throughput stress experiment is deliberately
+separate from this path: \texttt{cmd/stressbench} submits directly to
+\texttt{POST /observations} so that the capacity of the Event/Data and
+decision pipeline can be measured independently of the Card Reader's
+single polling loop.
 
 \section{Autonomous decision-making and data pipeline}
 \label{sec:autonomous}
@@ -581,9 +703,12 @@ inferred from code review.
 lifecycle: an ALLOW's unlock starts a bounded no-open timer (10 model
 seconds, REQ-FUNC-003); a completed passage (observed via
 DoorStateSensor's OPEN then CLOSED) triggers an immediate relock instead.
-Both paths converge on the same hard constraint -- a locked door never
-becomes unlocked except as the direct, logged consequence of an ALLOW
-decision.
+Both paths converge on the same control-path invariant: through this
+project's own control path, an unlock command is issued only as the
+direct, logged consequence of an ALLOW decision. External mutation of
+BuildSim state is outside that invariant because BuildSim is a shared
+external dependency rather than state exclusively owned by the Decision
+Service.
 
 \textbf{Why the anomaly baseline is deliberately simple.} Beyond the ML
 justification already given in Section~4.4, a third candidate factor the
@@ -616,8 +741,9 @@ hundred kilobytes) that retention policy was never a design pressure.
 
 \subsection{Key scenario: successful passage (dynamic diagram)}
 
-\diagramfig{dynamic.png}{1.0}{Dynamic diagram: the successful-passage
-scenario, numbered interactions among all nine runtime components.}
+\diagramfig{dynamic.png}{1.0}{Dynamic diagram: the successful-passage scenario, with numbered
+interactions among the runtime components participating in the control
+loop.}
 
 Card Reader polls the Simulator (1--2), posts the observation to
 Event/Data (3), which forwards it to Decision (4). Decision records an
@@ -667,11 +793,31 @@ binary on the host) and Docker Compose (\texttt{compose.yaml} at the
 repository root). Neither is a thin wrapper around the other -- both run
 the exact same binaries, configured only through command-line flags.
 
+\textbf{Placement reasoning.} All processes run on one laptop in the
+course deployment, but their logical placement still reflects an edge
+architecture. In a real building, the Card Reader, Event/Data Service,
+Decision Service, Door Actuator, and DoorStateSensor belong on local edge
+compute because authorization and safe door control must continue even
+when external connectivity is unavailable, and their latency lies on the
+physical control path. The Simulator is a course/test-time substitute for
+the physical environment and would not exist in the same form in a
+production building.
+
+Historical evidence could be replicated asynchronously to central or
+cloud storage, and the operator dashboard could be hosted remotely,
+because neither is required to complete an access decision. No GPU or
+external compute is justified for the implemented decision logic: the
+deterministic authorization and anomaly functions require negligible
+CPU and measured sub-millisecond decision time under nominal conditions.
+Keeping the safety-critical path local therefore minimizes dependency
+and latency while leaving monitoring and long-term analytics free to
+move off the edge.
+
 \textbf{\texttt{compose.yaml} defines ten services in total}: the eight
 project application processes, each its own container, sharing one
 multi-stage \texttt{Dockerfile}-built image (\texttt{access-control:latest})
 to avoid rebuilding an identical source tree eight times, each started
-with a different \texttt{command:}; BuildSim's own, unmodified,
+with a different \texttt{command:} override; BuildSim's own, unmodified,
 course-provided image (one service); and a one-shot \texttt{door-seed}
 init container (one service) that (re-)creates door-1 as LOCKED/CLOSED
 on every fresh stack (BuildSim has no persistence, CLAUDE.md \S4). Nine
@@ -722,6 +868,15 @@ change-and-failure behavior worth demonstrating with evidence rather
 than asserting.
 
 \section{Test plan and verification}
+The table below summarizes verification by test level. Every internal
+requirement has a requirement-specific verification approach and
+evidence location in \texttt{docs/traceability-matrix.md}; that document
+is the validation end of the requirement $\rightarrow$ design
+$\rightarrow$ verification thread. Reproducing the full 54-row matrix
+here would duplicate the authoritative artifact, so this section instead
+summarizes the kinds of verification used and the final regression
+results.
+
 \label{sec:testplan}
 
 \begin{longtable}[]{@{}
@@ -814,14 +969,15 @@ threshold; secondary metric \\
 \bottomrule
 \end{longtable}
 
-The threshold (p95 \(\leq\) 10 ms) was set \emph{after} this baseline was
-measured, deliberately -- high enough above the measured 0.601 ms to
-absorb scheduling jitter and modest load growth, but far below the
-\(\sim\)100 ms point at which an interactive response is perceived as
-non-instantaneous, so it remains a real engineering constraint rather
-than one loosened until it passed. \textbf{Caveat, stated plainly}: both
-numbers were measured against \texttt{FakeBuildSimClient}, not the real
-BuildSim HTTP adapter's GET-modify-PUT round trip -- the actuation path's
+The threshold (p95 \(\leq\) 10 ms) was set \emph{after} this exploratory
+baseline was measured, deliberately -- high enough above the measured
+0.601 ms to accommodate ordinary scheduling jitter and modest load
+growth, while still imposing a materially tighter engineering bound than
+the project's 2 s network timeout. It should therefore be read as a
+post-baseline engineering requirement rather than a preregistered
+performance target. \textbf{Caveat, stated plainly}: both latency metrics
+were measured against \texttt{FakeBuildSimClient}, not the real BuildSim
+HTTP adapter's GET-modify-PUT round trip; the physical actuation path's
 true latency against the real adapter was not separately benchmarked.
 
 \subsection{Failure / recovery}
@@ -831,15 +987,25 @@ time across 10 fresh runs.}
 
 Killing the Decision Service mid-attempt produces no decision and no
 command -- a locked door stays locked (REQ-RES-001) -- confirmed both
-automatically and against a real killed OS process. Restarting it (a
-fresh process, no carried-over state) recovers correctly; 10 runs
+automatically and against a real killed OS process. Restarting it as a
+fresh process, with no carried-over state, recovers correctly; 10 runs
 captured during this pass measured \textbf{min 10.83 ms, mean 18.8 ms,
-max 32.26 ms} from restart to the first correct ALLOW/UNLOCK. Killing the
-dependency the Actuator needs (BuildSim itself, or the Actuator container)
-produces a recorded \texttt{UNLOCK} command whose outcome is
-\texttt{UNVERIFIED} with an empty \texttt{observed\_state} -- never a
-false \texttt{CONFIRMED} (REQ-RES-002) -- and recovers fully once the
-dependency returns.
+max 32.26 ms} from restart to the first correct ALLOW/UNLOCK.
+
+Two actuator-side failure cases must be distinguished. When BuildSim is
+unavailable while the Door Actuator itself remains running, the Actuator
+cannot verify the physical state transition and therefore records an
+\texttt{UNVERIFIED} outcome with no confirmed
+\texttt{observed\_state}, never a false \texttt{CONFIRMED}
+(REQ-RES-002). Once BuildSim returns, later commands can again be
+confirmed normally.
+
+A different failure occurs when the Actuator itself is unreachable from
+the Decision Service. In that case the command can be recorded as issued
+by Decision, but delivery fails before the Actuator can produce any
+outcome record. This missing-outcome case was exposed during stress
+testing and remains an identified limitation rather than being
+misclassified as \texttt{UNVERIFIED}.
 
 \subsection{Anomaly policy behaviour}
 
@@ -896,19 +1062,34 @@ limit, not that unrelated one).
 \bottomrule
 \end{longtable}
 
-\textbf{Root cause, confirmed not assumed}: the Decision Service's own
-log shows \texttt{dial tcp ...: can't assign requested address} on its
-outbound call to the Door Actuator. Every inter-service call shares
-\texttt{http.DefaultClient}, whose default transport allows only 2 idle
-connections per host; each access attempt fans out into \(\sim\)4
-internal HTTP calls, so at concurrency \(\sim\)100 the system has
-hundreds of simultaneous short-lived loopback connections competing for a
-two-deep pool per link. This was confirmed by first ruling out a
-benchmark-tool artifact (undrained response bodies on the first sweep):
-after fixing the tool and re-running, the ceiling did not move -- the
-error originates in the production Decision Service's own log, not the
-benchmark client. \textbf{Not optimized in this pass} -- the purpose was
-to find and honestly report the limit, not move it (Section~\ref{sec:risks}).
+Each concurrency level in this sweep was sampled once. The
+non-monotonic partial recovery observed at concurrency 3000 should
+therefore be interpreted as evidence of unstable failure behavior, not
+as a repeatable recovery threshold. Repeated trials at each concurrency
+level would be required to estimate variance and establish a
+statistically stable breaking region.
+
+\textbf{Failure mechanism localized to the production HTTP path.} The
+Decision Service's own log reports
+\texttt{dial tcp ...: can't assign requested address} on outbound calls
+to the Door Actuator under high concurrency. Each access attempt fans
+out into approximately four internal HTTP calls, so high concurrency
+creates substantial short-lived socket and connection pressure. The
+project uses Go's default HTTP transport, which retains only a small
+number of idle keep-alive connections per host; limited connection reuse
+can therefore contribute to additional connection churn.
+
+An artifact in the first benchmark sweep -- response bodies that were not
+fully drained by the benchmark client -- was corrected and the sweep was
+re-run. The production-side failure persisted, ruling out that benchmark
+artifact as the explanation. The precise relative contribution of HTTP
+connection reuse, ephemeral-port exhaustion, and other local socket
+limits was not isolated further, so the result is reported as a
+localized connection/socket-pressure bottleneck rather than as a fully
+controlled causal attribution. \textbf{It was deliberately not optimized
+in this pass}: the purpose of the experiment was to locate and document
+the system's breaking behavior, not move the threshold
+(Section~\ref{sec:risks}).
 
 A second, previously-unknown gap this experiment surfaced: when
 Decision\(\rightarrow\)Actuator delivery itself fails (distinct from
@@ -997,11 +1178,14 @@ processes} (Actuator, Simulator, DoorStateSensor) -- a single point of
 failure for all three at once, named explicitly when discovered
 (\texttt{evidence/actuator-failure/README.md}) rather than worked around
 silently.
-\item \textbf{Connection-pool stress bottleneck}, confirmed root cause,
-deliberately not optimized (Section~\ref{sec:evaluation}) -- the obvious
-first fix (a larger \texttt{internal/httpx} connection pool) is named,
-not built, because this pass's purpose was to find and report the limit
-honestly, not move it.
+\item \textbf{Connection/socket-pressure stress bottleneck}, localized
+to the production HTTP path but not reduced to a single fully controlled
+cause (Section~\ref{sec:evaluation}). The first engineering response
+would be to tune and instrument \texttt{internal/httpx} connection
+reuse/pooling and repeat the experiment while observing socket and
+ephemeral-port behavior. This was deliberately not built in this pass
+because the experiment's purpose was to identify and characterize the
+limit rather than move it.
 \item \textbf{Decision\(\rightarrow\)Actuator missing-outcome failure
 mode}, discovered by the stress experiment, not fixed: a command can be
 recorded with no resolution at all if delivery to the Actuator itself
@@ -1053,43 +1237,324 @@ times over in this project (\texttt{docs/final-report-gap-analysis.md}).
 \label{sec:conclusion}
 
 The original question was whether an autonomous edge system can make
-safe building-access decisions from imperfect sensor data while
-remaining robust to communication and component failures. Within the
-tested prototype envelope, the answer is \textbf{yes, with explicitly
-identified limits}.
+safe building-access decisions while remaining robust to imperfect
+observations, communication failures, and component failures. Within the
+subset actually tested -- nominal observations, anomalous access
+behavior, Decision Service failure, BuildSim failure, and load-induced
+communication failure -- the prototype demonstrates that it can, with
+explicitly identified limits. Robustness to malformed, stale, duplicate,
+or out-of-order observations remains unimplemented and is therefore
+outside the demonstrated claim.
 
-\emph{Safe}: every safety invariant CLAUDE.md names was verified, not
-merely asserted -- an invalid or disabled card never unlocks a door; a
-DENY never produces an unlock command; the anomaly score, tested
-directly, cannot override a denial; a failed Decision Service leaves a
-locked door locked; an unconfirmed actuator result is recorded
-\texttt{UNVERIFIED}, never a false \texttt{CONFIRMED}; duplicate
-commands produce no duplicate physical effect.
+\emph{Safe within the implemented control path}: an invalid or disabled
+card never produces an authorized unlock; a DENY produces no unlock
+command; anomaly classification cannot override a denial; a failed
+Decision Service leaves an already-locked door locked; and when the Door
+Actuator is able to attempt a command but BuildSim cannot confirm the
+result, the outcome is recorded as \texttt{UNVERIFIED}, never falsely as
+\texttt{CONFIRMED}. Actuator-level command deduplication also prevents repeated delivery of
+the same command from causing duplicate physical effects.
 
-\emph{Robust to failure, within what was tested}: a killed Decision
-Service recovers in tens of milliseconds with no carried-over state; a
-killed BuildSim/Actuator dependency produces an honestly-unverified
-record and recovers fully once restored; every one of the eight project
-containers restarts independently in Docker without disturbing the
-others; and a genuine deployment-layer race condition, found by this
-pass's own verification rather than assumed away, was fixed and
-reverified rather than merely written down.
+\emph{Robust to the failures that were exercised}: a killed Decision
+Service recovered in 10.83--32.26 ms across ten measured runs with no
+carried-over process state. An unavailable BuildSim produced
+\texttt{UNVERIFIED} actuator outcomes and recovered once restored. A
+distinct unresolved failure was also exposed: if the Decision Service
+cannot reach the Actuator itself, a command may be recorded without any
+subsequent outcome. The Docker architecture keeps all eight project
+services independently deployable and restartable; Decision Service and
+Actuator restart/failure behavior were exercised directly while
+unrelated services continued running. A separate deployment-layer race
+between BuildSim startup and the one-shot \texttt{door-seed} service was
+found during verification, fixed, and re-tested rather than merely
+documented.
 
 \emph{Within explicit limits}: the system was stress-tested to an actual
-breaking point, not just a nominal-load check, and that limit's root
-cause was confirmed, not guessed at. A real, previously-unknown gap
-(Decision\(\rightarrow\)Actuator delivery failing silently into a
-resolution-less command) was discovered by that same stress experiment
-and is reported rather than concealed. Seven of 54 internal requirements
-remain unimplemented and six more partial, all named consistently across
-this project's whole development rather than only at the end. The
-anomaly baseline is deliberately simple and would not generalize past its
+breaking region rather than only under nominal load. Production logs
+localized the failure to outbound HTTP/socket pressure in the
+Decision-to-Actuator path after a benchmark-client artifact had been
+eliminated, although the exact contribution of connection reuse,
+ephemeral-port limits, and related host-level effects was not isolated
+further. The same experiment exposed the previously unknown
+Decision-to-Actuator missing-outcome case. Seven of 54 internal
+requirements remain unimplemented and six more are partial; these gaps
+are stated consistently in the traceability matrix and in this report.
+The anomaly baseline is deliberately simple and cannot adapt beyond its
 two fixed factors without further work.
 
-None of these limits were papered over to make this report read better
-than the system behaves. What they show, collectively, is a system whose
-behavior, failure modes, and boundaries can be explained from evidence --
-which is the actual claim this report makes, not that the system is
-complete.
+The project therefore does not claim completeness or general robustness
+to every form of imperfect data or failure. Its demonstrated claim is
+narrower: within the tested prototype envelope, the architecture makes
+the control path, safety decisions, evidence trail, failure behavior,
+and known limits explicit enough to test, reproduce, and explain from
+evidence.
+
+\clearpage
+\appendix
+
+\section{Full Requirements}
+\label{app:requirements}
+
+This appendix reproduces the complete set of 54 internal project requirements.
+The requirements are grouped by their stable identifiers and preserve the
+normative requirement statements and acceptance criteria from the architecture
+baseline. Final implementation status, verification evidence, and rationale are
+maintained in \texttt{docs/traceability-matrix.md}; development-time status notes
+are intentionally not duplicated here.
+
+The mandatory course pass/fail checklist is kept separate from these internal
+system requirements because it defines assessment gates rather than runtime
+system behaviour.
+
+\setlength{\LTpre}{0pt}
+\setlength{\LTpost}{8pt}
+
+\begin{longtable}[]{@{}
+>{\raggedright\arraybackslash}p{0.18\linewidth}
+>{\raggedright\arraybackslash}p{0.76\linewidth}@{}}
+\toprule
+\textbf{Requirement ID} & \textbf{Requirement and acceptance criteria} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{Requirement ID} & \textbf{Requirement and acceptance criteria} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+\multicolumn{2}{@{}l}{\textbf{Core functional requirements}} \\[2pt]
+\texttt{REQ-FUNC-001} & The system shall deny an access attempt when no valid permission exists for the presented card, requested controlled boundary, and model time.
+\textit{Acceptance:}
+\begin{itemize}\tightlist
+\item authorization decision is DENY
+\item door remains locked
+\item occupant does not cross the controlled boundary
+\item DENY decision and reason are recorded
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-FUNC-002} & The system shall allow an access attempt when the presented card is active and a valid permission exists for the requested controlled boundary at model time.
+\textit{Acceptance:}
+\begin{itemize}\tightlist
+\item authorization decision is ALLOW
+\item actuator receives an unlock command
+\item BuildSim reflects the unlocked state
+\item the occupant may cross the controlled boundary
+\item decision and outcome are recorded
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-FUNC-003} & A door that was locked before an approved access attempt shall automatically return to the locked state no later than 10 model seconds after being unlocked if the door has not been opened.
+\textit{Acceptance:}
+\begin{itemize}\tightlist
+\item initial state is LOCKED
+\item an ALLOW decision causes the door to unlock
+\item no door-open event occurs
+\item a DOOR\_NOT\_OPENED event is recorded
+\item door returns to LOCKED within 10 model seconds
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-FUNC-004} & When an authorized occupant opens and passes through a controlled door, the system shall relock the door after passage is complete.
+\textit{Acceptance:}
+\begin{itemize}\tightlist
+\item valid access is approved
+\item door opens
+\item occupant crosses boundary
+\item destination occupancy changes appropriately
+\item door returns to LOCKED
+\end{itemize} \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{Authorization requirements}} \\[2pt]
+\texttt{REQ-AUTH-001} & Each access card shall be associated with exactly one active user at a time. \\
+\addlinespace[3pt]
+\texttt{REQ-AUTH-002} & Users shall be assigned one or more roles. \\
+\addlinespace[3pt]
+\texttt{REQ-AUTH-003} & Permissions shall be assignable at the role level. \\
+\addlinespace[3pt]
+\texttt{REQ-AUTH-004} & The system shall support user-specific permission overrides. \\
+\addlinespace[3pt]
+\texttt{REQ-AUTH-005} & Permissions may include time-of-day and day-of-week constraints evaluated against model time. \\
+\addlinespace[3pt]
+\texttt{REQ-AUTH-006} & A disabled, expired, or unknown card shall not authorize access. \\
+\addlinespace[3pt]
+\texttt{REQ-AUTH-007} & If no applicable permission exists, access shall default to DENY. \\
+\addlinespace[3pt]
+\texttt{REQ-AUTH-008} & The system shall define deterministic precedence when both role-level and user-specific permissions apply.
+\textit{Acceptance:}
+\begin{itemize}\tightlist
+\item precedence rules are documented
+\item the same inputs always produce the same authorization result
+\item conflicting role/user permissions are covered by tests
+\end{itemize} \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{Topology requirements}} \\[2pt]
+\texttt{REQ-TOPO-001} & Rooms shall be assigned to security zones.
+\begin{itemize}\tightlist
+\item Initial security zones shall include:
+\item public/open
+\item employee
+\item student
+\item restricted
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-TOPO-002} & A controlled door shall represent a directed or bidirectional transition between two BuildSim locations and their associated security zones. \\
+\addlinespace[3pt]
+\texttt{REQ-TOPO-003} & Each controlled direction shall be associated with:
+\begin{itemize}\tightlist
+\item a card reader
+\item a door actuator
+\item observable door state
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-TOPO-004} & Room identity shall use a level-qualified identifier such as level0/A109. \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{Simulation requirements}} \\[2pt]
+\texttt{REQ-SIM-001} & The simulator shall generate occupant movement and access behavior according to configured behavioral profiles, schedules, security-zone access patterns, and stochastic variation.
+\textit{Acceptance:}
+\begin{itemize}\tightlist
+\item weekday arrival and departure distributions are configurable
+\item room-transition probabilities are configurable
+\item generated behavior is reproducible for a fixed seed
+\item generated behavior differs for different seeds
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-SIM-002} & Normal weekday behavior shall include structured arrival, departure, lunch, and room-use patterns with controlled stochastic variation. \\
+\addlinespace[3pt]
+\texttt{REQ-SIM-003} & Simulation runs shall support a configurable random seed so that runs can be reproduced. \\
+\addlinespace[3pt]
+\texttt{REQ-SIM-004} & The simulator shall prevent an occupant from crossing a locked controlled door unless the active scenario explicitly models forced entry. \\
+\addlinespace[3pt]
+\texttt{REQ-SIM-005} & When an occupant successfully crosses from one room to another, the simulator shall update the physical occupancy state of both rooms and cause subsequent occupancy observations to reflect the change.
+\textit{Acceptance:}
+\begin{itemize}\tightlist
+\item source-room occupancy decreases by one
+\item destination-room occupancy increases by one
+\item no occupancy transition occurs when movement is denied
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-SIM-006} & Actuator actions shall influence subsequent simulated behavior and sensor readings, closing the cyber-physical feedback loop. \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{Autonomous decision requirements}} \\[2pt]
+\texttt{REQ-DEC-001} & At least one independently deployable component shall autonomously make decisions based on sensor observations and influence actuator behavior. \\
+\addlinespace[3pt]
+\texttt{REQ-DEC-002} & Authorization and anomaly detection shall be treated as separate decision signals. \\
+\addlinespace[3pt]
+\texttt{REQ-DEC-003} & An anomaly score alone shall not grant access that is otherwise unauthorized. \\
+\addlinespace[3pt]
+\texttt{REQ-DEC-004} & Every access decision shall record:
+\begin{itemize}\tightlist
+\item decision
+\item reason
+\item associated access event
+\item model time
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-DEC-005} & The system shall identify access behavior that differs from defined normal behavior. \\
+\addlinespace[3pt]
+\texttt{REQ-DEC-006} & Anomalous but authorized behavior shall be distinguishable from unauthorized behavior. \\
+\addlinespace[3pt]
+\texttt{REQ-DEC-007} & Every autonomous decision shall be traceable to the observations and decision signals used to produce it.
+\textit{Acceptance:}
+\begin{itemize}\tightlist
+\item decision contains or references the triggering observation ID
+\item authorization result is identifiable
+\item anomaly result is identifiable where applicable
+\item decision-policy version is identifiable
+\end{itemize} \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{Distributed-system requirements}} \\[2pt]
+\texttt{REQ-DIST-001} & Sensor, actuator, and autonomous decision components shall run as separate, independently deployable and restartable processes. \\
+\addlinespace[3pt]
+\texttt{REQ-DIST-002} & The system shall not be implemented as a single monolithic application. \\
+\addlinespace[3pt]
+\texttt{REQ-DIST-003} & Components shall communicate through documented network interfaces. \\
+\addlinespace[3pt]
+\texttt{REQ-DIST-004} & Network calls shall use bounded timeouts. \\
+\addlinespace[3pt]
+\texttt{REQ-DIST-005} & A restarted device process shall re-register with BuildSim and resume operation. \\
+\addlinespace[3pt]
+\texttt{REQ-DIST-006} & Repeated registration shall not create duplicate logical devices. \\
+\addlinespace[3pt]
+\texttt{REQ-DIST-007} & Repeated delivery of the same observation or command shall not cause duplicate physical side effects. \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{Data-pipeline requirements}} \\[2pt]
+\texttt{REQ-DATA-001} & The system shall provide a defined data pipeline that collects sensor observations, stores them, and makes them available for monitoring, analysis, decision-making, training, or evaluation. \\
+\addlinespace[3pt]
+\texttt{REQ-DATA-002} & Observations, decisions, actuator commands, and relevant outcomes required for replay and evaluation shall survive application-process restarts. \\
+\addlinespace[3pt]
+\texttt{REQ-DATA-003} & Every retained observation shall include:
+\begin{itemize}\tightlist
+\item unique event identifier
+\item source identifier
+\item model time
+\item source time
+\item receive time
+\item schema version
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-DATA-004} & The pipeline shall detect and record duplicate observations. \\
+\addlinespace[3pt]
+\texttt{REQ-DATA-005} & The pipeline shall identify late or out-of-order observations. \\
+\addlinespace[3pt]
+\texttt{REQ-DATA-006} & Malformed observations shall be rejected from the validated data path, retained or logged as rejected evidence, and counted by pipeline telemetry. \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{Resilience requirements}} \\[2pt]
+\texttt{REQ-RES-001} & If the authorization or decision service is unavailable, a locked controlled door shall remain locked. \\
+\addlinespace[3pt]
+\texttt{REQ-RES-002} & If an actuator command cannot be confirmed, the resulting door state shall be marked as unverified and the failure shall be recorded. \\
+\addlinespace[3pt]
+\texttt{REQ-RES-003} & Stale sensor observations shall not be treated as current without an explicit quality flag. \\
+\addlinespace[3pt]
+\texttt{REQ-RES-004} & The system shall recover from restart of a sensor, actuator, or decision process without requiring restart of unrelated processes.
+\textit{Acceptance:}
+\begin{itemize}\tightlist
+\item restarted process re-registers/reconnects
+\item normal processing resumes
+\item no duplicate logical devices are created
+\item recovery time is measured
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-RES-005} & The system shall detect when a required sensor observation is unavailable or stale beyond its configured freshness limit.
+\textit{Acceptance:}
+\begin{itemize}\tightlist
+\item stale/missing state is identifiable
+\item affected decisions record degraded-data status
+\item the system follows the documented degraded-state policy
+\end{itemize} \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{Visualization requirements}} \\[2pt]
+\texttt{REQ-VIS-001} & The dashboard shall visualize, for the active scenario:
+\begin{itemize}\tightlist
+\item current occupancy
+\item controlled-door state
+\item recent access decisions
+\item active anomaly/alert state
+\item degraded or failed component state where applicable
+\end{itemize} \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{BuildSim integration requirements}} \\[2pt]
+\texttt{REQ-BS-001} & BuildSim shall be treated as the authoritative source for current building topology, controlled-door state, and registered equipment state.
+\begin{itemize}\tightlist
+\item Simulated occupant location and occupancy truth are owned by the Occupant and Movement Simulator as defined in ADR-006.
+\end{itemize} \\
+\addlinespace[3pt]
+\texttt{REQ-BS-002} & Historical observations and decisions shall not rely solely on BuildSim persistence. \\
+\addlinespace[3pt]
+\texttt{REQ-BS-003} & An accepted actuator command shall produce an observable BuildSim state change that can affect subsequent simulator behavior or sensor observations. \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{Performance requirements}} \\[2pt]
+\texttt{REQ-PERF-001} & Under nominal load, 95\% of access decisions shall be produced within a defined latency threshold.
+Access decision latency is defined as the wall-clock time from the Event/Data Service receiving an access-attempt observation to the Event/Data Service receiving the resulting AccessDecision (wall-clock, not model time; see docs/evaluation-plan.md).
+\textit{Acceptance:}
+p95 $\leq$ 10 ms, p100 $\leq$ 50 ms. Baseline measurement (200 samples, nominal load, in-process over loopback, 2026-10-09): p50 = 0.30 ms, p95 = 0.60 ms, max = 0.93 ms — see evidence/latency/results.json. The threshold is set well above this measured baseline (headroom for scheduling jitter, GC pauses, and modest load growth) but far below the \textasciitilde{}100 ms point at which an interactive, door-side response is perceived as non-instantaneous, so the requirement remains a real engineering constraint rather than an arbitrarily loose one chosen merely to pass. It was not chosen before this measurement existed. \\
+\addlinespace[3pt]
+\multicolumn{2}{@{}l}{\textbf{Verification requirements}} \\[2pt]
+\texttt{REQ-TEST-001} & The system shall support reproducible end-to-end scenarios using a configured scenario identifier and random seed. \\
+\addlinespace[3pt]
+\texttt{REQ-TEST-002} & The system shall expose enough evidence to trace an access attempt from sensor observation through decision, actuator command, and resulting BuildSim state. \\
+\addlinespace[3pt]
+\end{longtable}
+
 
 \end{document}
