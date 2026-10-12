@@ -312,7 +312,7 @@ restart or a full `docker compose restart`. See `docs/deployment.md` for the
 complete container/service mapping, networking, and the reasoning behind
 choosing Compose.
 
-## Current Development Status
+<!-- ## Current Development Status
 
 The vertical slice described by architecture baseline v0.2 (ADR-001 through
 ADR-006) is implemented end-to-end: one controlled door, a configured
@@ -321,7 +321,7 @@ policy, runtime assurance, actuation, sensing, evidence retention, a
 dashboard, named/seeded scenarios (`docs/scenarios.md`), and a Docker Compose
 deployment (`docs/deployment.md`) alongside the native workflow above. See
 `docs/test-plan.md` for per-requirement verification status and
-`docs/final-report-gap-analysis.md` for what remains out of scope.
+`docs/final-report-gap-analysis.md` for what remains out of scope. -->
 
 ## Testing and Evaluation
 
